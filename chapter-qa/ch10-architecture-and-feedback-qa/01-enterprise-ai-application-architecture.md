@@ -8,9 +8,9 @@ tags: [system-architecture, context-construction, pii-masking, guardrails, model
 # 01. 엔터프라이즈 AI 플랫폼 시스템 아키텍처
 
 ## 📌 핵심 요약 & 전체 맥락
-> **"단일 프롬프트 호출에서 출발하여, 보안·안전성·비용 최적화·도구 실행이 완비된 복합 AI 시스템(Compound AI System)으로 진화한다."**  
-> 실제 엔터프라이즈 프로덕션 환경의 AI 시스템은 단순히 LLM API를 호출하는 데서 끝나지 않습니다.  
-> 개인정보 유출을 원천 차단하는 **가역적 PII 마스킹(Figure 10-3)**, 유해 입력과 비정형 출력을 방어하는 **입출력 가드레일(Figure 10-4)**, 쿼리 난이도에 따라 모델을 지능적으로 분기하고 장애 시 자동 폴백하는 **모델 라우터 및 통합 게이트웨이(Figures 10-5, 10-6, 10-7)**,  
+> **"단일 프롬프트 호출에서 출발하여, 보안·안전성·비용 최적화·도구 실행이 완비된 복합 AI 시스템(Compound AI System)으로 진화합니다."**  
+> 실제 엔터프라이즈 프로덕션 환경의 AI 시스템은 단순히 거대 언어 모델(**LLM, Large Language Model**)의 **API (Application Programming Interface)**를 호출하는 데서 끝나지 않습니다.  
+> 개인정보 유출을 원천 차단하는 **가역적 PII (Personally Identifiable Information, 개인 식별 정보) 마스킹(Figure 10-3)**, 유해 입력과 비정형 출력을 방어하는 **입출력 가드레일(Figure 10-4)**, 쿼리 난이도에 따라 모델을 지능적으로 분기하고 장애 시 자동 폴백하는 **모델 라우터 및 통합 게이트웨이(Figures 10-5, 10-6, 10-7)**,  
 > 중복 질의 비용을 90% 이상 절감하는 **시맨틱/프롬프트 다계층 캐시(Figure 10-8)**, 그리고 데이터베이스를 안전하게 갱신하는 **외부 도구 쓰기(Write) 액션 루프(Figure 10-10)**를 단계별 아키텍처 다이어그램으로 완벽하게 정리합니다.
 
 ---
@@ -53,12 +53,12 @@ flowchart TD
 
 ## 2. 개인정보 보호와 가역적 PII 마스킹 (Figure 10-3, p. 453)
 
-사내 기밀 데이터나 API 키, 고객 주민번호를 외부 상용 LLM API로 전송할 때 사용하는 **양방향 가역적 마스킹(Reversible PII Masking)**:
+사내 기밀 데이터나 API 키, 고객 주민번호를 외부 상용 LLM API로 전송할 때 사용하는 **양방향 가역적 마스킹 (Reversible PII Masking)**:
 
 ```mermaid
 flowchart LR
     subgraph Client["내부 보안 경계선 (On-Premises / VPC)"]
-        Raw["원본 질의:\npat = 'secret_token_123'"] --> Regex["NER / PII 감지기"]
+        Raw["원본 질의:\npat = 'secret_token_123'"] --> Regex["개체명 인식 / PII 감지기\n(NER & Regex Filter)"]
         Regex --> Map[("가역적 PII 맵핑 테이블\n[ACCESS_TOKEN_1] ➔ 'secret_token_123'")]
         Regex --> Masked["마스킹된 질의:\npat = [ACCESS_TOKEN_1]"]
     end
@@ -82,13 +82,13 @@ flowchart LR
 
 1. 입력 가드레일 (Input Guardrails) :
    - 프롬프트 인젝션 및 탈옥(Jailbreak) 패턴 탐지
-   - 개인식별정보(PII) 및 독성 발화 필터링
+   - 개인 식별 정보(PII) 및 유해/독성 발화 필터링
    - 비즈니스 도메인 이탈 질의(Out-of-Scope) 차단
 
 2. 출력 가드레일 (Output Guardrails) :
    - 사실성/환각 검증 스코어러 (Self-Check / RAG Triad)
    - 구조화 출력 검증 (Pydantic / JSON 스키마 100% 준수 검사)
-   - 브랜드 안전성(Brand Safety) 및 경쟁사 언급 차단 필터
+   - 브랜드 안전성(Brand Safety) 및 경쟁사 비방 차단 필터
 ```
 
 ---
@@ -96,14 +96,14 @@ flowchart LR
 ## 4. 지능형 라우팅과 통합 모델 게이트웨이 (Figures 10-5, 10-6, 10-7) 🏆
 
 ### ① 쿼리 복잡도 기반 모델 라우팅 (Figure 10-5)
-* **경량 라우터 분류기:** 사용자 질의의 복잡도와 필요 추론 단계를 5ms 이내에 판정.
+* **경량 라우터 분류기:** 사용자 질의의 복잡도와 필요 추론 단계를 5ms 이내에 판정합니다.
   * **단순 사실 조회 / 번역 / 요약:** 경량·초저가 모델 (`GPT-4o-mini`, `Llama-3-8B`)로 라우팅 ➔ **비용 95% 절감!**
   * **고난도 코딩 / 복합 추론 / 법률 분석:** 프론티어 고성능 모델 (`Claude 3.5 Sonnet`, `o1`, `GPT-4o`)로 라우팅.
 
 ### ② 통합 모델 게이트웨이 (Model Gateway, Figure 10-6)
-* **단일 인터페이스 추상화 (LiteLLM / Portkey):** 모든 애플리케이션 코드가 단일 엔드포인트를 바라보게 설계.
-* **장애 복원력 (Failover & Fallback):** OpenAI 서비스에 503 에러나 레이트 리밋 발생 시, **0.1초 만에 Azure OpenAI 또는 Anthropic Claude 엔드포인트로 무중단 자동 페일오버**.
-* **중앙 집중식 토큰 및 비용 거버넌스:** 팀별/프로젝트별 일일 API 사용량 쿼터 제한 및 로깅.
+* **단일 인터페이스 추상화 (LiteLLM / Portkey):** 모든 애플리케이션 코드가 단일 엔드포인트를 바라보게 설계합니다.
+* **장애 복원력 (Failover & Fallback):** OpenAI 서비스에 503 장애나 레이트 리밋(Rate Limit) 발생 시, **0.1초 만에 Azure OpenAI 또는 Anthropic Claude 엔드포인트로 무중단 자동 페일오버**합니다.
+* **중앙 집중식 토큰 및 비용 거버넌스:** 팀별/프로젝트별 일일 API 사용량 쿼터 제한 및 로깅을 중앙에서 제어합니다.
 
 ### ③ 안전한 모델 배포 전략 (Shadow & A/B Testing)
 엔터프라이즈 환경에서는 새로운 프롬프트나 파인튜닝된 모델을 배포할 때, 게이트웨이 단에서 리스크를 통제합니다.
@@ -125,12 +125,12 @@ flowchart TD
 
 ---
 
-## 6. 에이전트 루프와 외부 도구 쓰기(Write) 액션 (Figure 10-9, 10-10)
+## 6. 에이전트 루프와 외부 도구 쓰기(Write) 액션 (Figures 10-9, 10-10)
 
 * **읽기 전용 액션 (Read-only Actions):** 벡터 검색, SQL 조회, 웹 검색 등 시스템 상태를 바꾸지 않는 안전한 호출.
 * **쓰기 액션 (Write Actions, Figure 10-10):**  
-  이메일 발송, 결제 승인, DB 레코드 삭제, GitHub 커밋 등 **외부 상태를 영구적으로 변경하는 작업**.  
-  ➔ **반드시 휴먼인더루프(Human-in-the-loop) 승인 게이트와 트랜잭션 롤백 메커니즘을 내장**해야 합니다.
+  이메일 발송, 결제 승인, DB 레코드 삭제, GitHub 커밋 등 **외부 시스템의 영구 상태를 변경하는 작업**.  
+  ➔ **반드시 HITL (Human-in-the-Loop, 인간 개입 / 최종 승인) 게이트와 트랜잭션 롤백 메커니즘을 내장**해야 합니다.
 
 ---
 

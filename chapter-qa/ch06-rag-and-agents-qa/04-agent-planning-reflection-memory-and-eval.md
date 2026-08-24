@@ -8,9 +8,9 @@ tags: [agents, planning, control-flow, react, reflexion, self-reflection, tool-t
 # 04. 에이전트 계획 수립, 자가 반성(ReAct, Reflexion)과 메모리 계층
 
 ## 📌 핵심 요약 & 전체 맥락
-> **"단순한 지시 수행을 넘어, 스스로 생각하고(Reasoning), 행동하고(Acting), 실패로부터 반성(Reflexion)하며 기억(Memory)을 축적하는 것이 자율 에이전트의 완성입니다."**  
-> 본 섹션에서는 에이전트가 복잡한 다단계 과업을 해결하기 위한 **4가지 실행 제어 흐름(순차, 병렬 분기, 조건문, 루프)**과, 생각과 행동을 실시간으로 교차 반복하는 **ReAct(Reason + Act)** 프레임워크를 분석합니다.  
-> 나아가 실패한 시도의 궤적(Trajectory)을 언어로 비판 회고하여 다음 시도의 성공률을 수직 상승시키는 **Reflexion(자가 반성 루프)**, 다음 호출 도구를 마르코프 확률로 예측하는 **도구 전이 트리(Tool Transition Tree)**, 그리고 **3단계 메모리 계층 구조(내부 가중치 지식 ➔ 장기 외장 기억 ➔ 단기 작업 기억)**의 최적 관리 정책을 완벽하게 정리합니다.
+> **"단순한 명령 수행을 넘어, 스스로 생각하고(Reasoning), 행동하고(Acting), 실패로부터 반성(Reflexion)하며 기억(Memory)을 축적하는 것이 진정한 자율 에이전트의 완성입니다."**  
+> 본 섹션에서는 에이전트가 복잡한 다단계 과업을 해결하기 위한 **4가지 실행 제어 흐름(순차, 병렬 분기, 조건문, 루프)**과, 생각과 행동을 실시간으로 교차 반복하는 **ReAct (Reason + Act)** 프레임워크를 분석합니다.  
+> 나아가 실패한 시도의 궤적(Trajectory)을 언어로 비판 회고하여 다음 시도의 성공률을 수직 상승시키는 **Reflexion (자가 반성 루프)**, 다음 호출 도구를 마르코프 확률로 예측하는 **도구 전이 트리(Tool Transition Tree)**, 그리고 **3단계 메모리 계층 구조(내부 가중치 지식 ➔ 장기 외장 기억 ➔ 단기 작업 기억)**의 최적 관리 정책을 완벽하게 정리합니다.
 
 ---
 
@@ -36,7 +36,7 @@ tags: [agents, planning, control-flow, react, reflexion, self-reflection, tool-t
 ```mermaid
 flowchart TD
     subgraph Flow["에이전트 4대 제어 흐름 (Figure 6-11)"]
-        Seq["1. 순차 실행 (Sequential)\nTask A ➔ Task B\n(자연어 ➔ SQL 번역 ➔ SQL 실행)"]
+        Seq["1. 순차 실행 (Sequential)\nTask A ➔ Task B\n(자연어 ➔ SQL 번역 ➔ DB 쿼리 실행)"]
         Par["2. 병렬 실행 (Parallel)\nTask A ➔ [Task B, Task C 동시 실행]\n(인기 상품 100개 검색 ➔ 100개 가격 동시 조회)"]
         Cond["3. 조건부 분기 (If-Else)\nTask A ➔ 조건 판단 ➔ Task B 또는 Task C\n(기업 실적 분석 ➔ 흑자면 매수, 적자면 매도)"]
         Loop["4. 반복 루프 (For / While Loop)\nTask A ➔ 조건 만족 시까지 반복\n(소셜 바이럴 원작자 추적을 위해 리포스트 역추적 반복)"]
@@ -44,7 +44,7 @@ flowchart TD
 ```
 
 * **엔지니어링 시사점:**  
-  * 여러 웹사이트를 긁어와야 할 때 순차 실행 대신 **병렬 실행(Parallel)**을 지원하는 에이전트 프레임워크를 사용하면 **사용자 체감 지연시간(Latency)을 비약적으로 단축**할 수 있습니다.
+  여러 웹사이트를 크롤링하거나 복수 도구를 호출할 때 순차 실행 대신 **병렬 실행(Parallel)**을 지원하는 에이전트 프레임워크를 사용하면 **사용자 체감 지연시간(Latency)을 비약적으로 단축**할 수 있습니다.
 
 ---
 
@@ -54,7 +54,7 @@ flowchart TD
 이 둘을 융합한 **ReAct (Reason + Act, 추론과 행동의 결합)** 모델은 한 발짝 생각(Thought)하고, 한 발짝 행동(Act)한 뒤, 그 결과를 주변에서 관찰(Observation)하며 신중하게 탐험하는 방식입니다.
 
 ```
-[ ReAct의 HotpotQA 문제 해결 실증 (Figure 6-12, p. 294) ]
+[ ReAct의 HotpotQA(다단계 추론 벤치마크) 문제 해결 실증 (Figure 6-12, p. 294) ]
 
 질문: "Apple Remote 외에, Apple Remote가 원래 제어하도록 설계된 프로그램을 제어할 수 있는 다른 장치는?"
 
@@ -118,7 +118,7 @@ sequenceDiagram
 ```mermaid
 flowchart TD
     subgraph Mem["에이전트 3단계 메모리 계층 (Figure 6-16)"]
-        L3["1. 내부 가중치 지식 (Internal Parametric Knowledge)\n- 사전 학습 및 파인튜닝으로 고정된 가중치 지식\n- 호흡법이나 문법처럼 모든 질의에서 즉시 참조"]
+        L3["1. 내부 가중치 지식 (Internal Parametric Knowledge)\n- 사전 학습 및 파인튜닝으로 고정된 가중치 지식\n- 언어 문법, 상식처럼 모든 질의에서 즉시 참조"]
         L2["2. 장기 외장 메모리 (Long-term External Memory)\n- 벡터 데이터베이스, SQL DB, 파일 시스템\n- 세션을 넘나드는 영속적 기억 (사용자 취향, 과거 대화 이력)"]
         L1["3. 단기 작업 기억 (Short-term Working Memory)\n- 현재 프롬프트의 컨텍스트 윈도우 (Context Window)\n- 즉각적인 작업 수행을 위한 최근 대화 턴 및 도구 출력"]
     end
@@ -147,7 +147,7 @@ flowchart TD
 
 ## 6. 에이전트 평가 프레임워크 (Agent Evaluation) ⭐
 
-단일 턴(Single-turn) 질의응답 시스템인 기본 RAG와 달리, 에이전트는 도구를 여러 번 호출하고 상태를 변화시키며 장기적인 목표를 달성해야 합니다. 따라서 기존의 정확도(Accuracy) 지표만으로는 에이전트를 제대로 평가할 수 없습니다.
+단일 턴(Single-turn) 질의응답 시스템인 기본 RAG와 달리, 에이전트는 도구를 여러 번 호출하고 상태를 변화시키며 장기적인 목표를 달성해야 합니다. 따라서 기존의 단순 정확도(Accuracy) 지표만으로는 에이전트를 제대로 평가할 수 없습니다.
 
 * **에이전트 궤적 평가 (Trajectory Evaluation):**  
   최종 결과물만 채점하는 것이 아니라, 에이전트가 목표 달성을 위해 거쳐간 **중간 추론 단계(Thought)와 도구 호출 내역(Tool Calls)**이 합리적인지 평가합니다.
@@ -155,7 +155,6 @@ flowchart TD
   1. **도구 선택 정확도 (Tool Selection Accuracy):** 올바른 도구를 적절한 타이밍에 호출했는가?
   2. **인자 추출 정확도 (Argument Extraction):** 도구 호출 시 필수 파라미터(예: 날짜, ID)를 정확히 넘겨주었는가?
   3. **복구 능력 (Recovery Rate):** 도구 실행 중 에러가 발생했을 때 멈추지 않고 자가 수정(Self-Correction)을 통해 목표를 완수했는가?
-* **실무 시사점:** 에이전트 평가는 필연적으로 상태(State) 추적이 필요하므로, 위험한 도구 호출을 차단하는 모의 실행 환경(Sandbox)과 각 스텝별 로그를 캡처하는 전문 평가 파이프라인 구축이 필수적입니다.
 
 ---
 

@@ -59,7 +59,7 @@ flowchart TD
 ## 📊 Chapter 7 주요 도표 & 수치 색인
 
 | 도표 번호 | 도표 제목 및 핵심 내용 | 책 페이지 | 해당 소챕터 |
-| :---: | :--- | :---: | :--- :
+| :---: | :--- | :---: | :---: |
 | **Figure 7-1** | Code Llama 파인튜닝 파이프라인 (Llama 2 ➔ Code ➔ Python / Instruct) | **p. 308** | 01 |
 | **Table 7-1** | 범용 모델 GPT-4 vs 금융 특화 모델(FinGPT, BloombergGPT) FPB/FiQA 벤치마크 비교표 | **p. 310** | 01 |
 | **Figure 7-2** | 파인튜닝을 통해 장황한 퓨샷 프롬프트를 콤팩트한 프롬프트로 단축하는 토큰 절감 효과 | **p. 312** | 01 |
@@ -87,3 +87,21 @@ flowchart TD
 | **Figure 7-18** | 복수의 파인튜닝 모델을 전문가(Experts)로 묶고 라우터를 붙여 MoE로 변환하는 FrankenMoE | **p. 351** | 04 |
 | **Figure 7-19** | 32개 레이어를 중첩 연결하여 48개 레이어로 확장하는 Depthwise Scaling (Solar-10.7B) | **p. 353** | 04 |
 | **Figure 7-20** | 서로 다른 LoRA 어댑터 행렬을 결합하여 랭크 $r_1 + r_2$의 통합 어댑터를 만드는 LoRA 병합 | **p. 355** | 04 |
+
+---
+
+## 💡 주요 축약어 원문 및 해설 사전 (Abbreviations Glossary)
+
+* **SFT (Supervised Fine-Tuning, 지도 미세조정):** 사람이 작성한 고품질의 `(지시문, 모범 답안)` 데이터셋을 사용하여 사전 훈련된 모델의 지시 이행 능력을 교정하는 파인튜닝 기법.
+* **RLHF (Reinforcement Learning from Human Feedback, 인간 피드백 기반 강화학습):** 인간의 선호도 보상 모델(Reward Model)을 구축하고 PPO 등의 강화학습 알고리즘으로 모델의 행동을 인간의 가치관과 안전 가이드라인에 정렬(Alignment)하는 기법.
+* **DPO (Direct Preference Optimization, 직접 선호도 최적화):** 별도의 복잡한 보상 모델이나 강화학습 루프 없이, 선호 응답과 비선호 응답의 교차 엔트로피 손실 함수만으로 모델을 직접 정렬하는 현대적 선호도 튜닝 기법.
+* **PEFT (Parameter-Efficient Fine-Tuning, 매개변수 효율적 파인튜닝):** 수십억 개의 전체 가중치(Full Parameters)를 모두 업데이트하는 대신, 전체의 0.1~1% 미만의 극소수 파라미터만 학습하여 GPU 메모리와 저장 공간을 극적으로 절감하는 기법들의 총칭.
+* **LoRA (Low-Rank Adaptation, 저순위 적응):** 거대 가중치 행렬 $W_{d \times k}$를 직접 학습하지 않고, 랭크 $r \ll \min(d, k)$인 두 개의 작은 저차원 행렬 곱($B_{d \times r} \times A_{r \times k}$)으로 분해하여 학습시키는 표준 PEFT 기법.
+* **QLoRA (Quantized Low-Rank Adaptation, 양자화 저순위 적응):** 베이스 모델 가중치를 4비트 NormalFloat (NF4)로 극단적 압축하고, 이중 양자화(Double Quantization) 및 페이징된 메모리(Paged Optimizers)를 적용하여 단 한 장의 소비자용 GPU(24GB VRAM)로 65B 거대 모델을 학습시키는 기법.
+* **NF4 (NormalFloat 4-bit, 정규분포 4비트 부동소수점):** 정규분포를 따르는 사전 훈련 가중치에 정보 이론적으로 완벽하게 최적화된 QLoRA 전용 비트 포맷.
+* **FP32 / FP16 / BF16 (Floating Point 32/16, Brain Floating Point 16):** 부동소수점 수치 정밀도. FP32는 32비트 표준, FP16은 16비트 절반 정밀도, BF16은 구글이 개발한 8비트 지수부를 유지해 언더플로/오버플로를 방지하는 딥러닝 표준 포맷.
+* **SLERP (Spherical Linear Interpolation, 구면 선형 보간):** 고차원 벡터 공간에서 두 가중치 벡터 사이의 최단 호(Arc)를 따라 각도와 크기를 기하학적으로 보간하여 모델을 병합하는 수학적 알고리즘.
+* **TIES-Merging (TrIm, Elect Sign, and Merge):** 다중 파인튜닝 모델을 병합할 때 변화량이 미미한 가중치를 가지치기(Trim)하고, 부호 충돌(Sign Conflict)을 다수결로 해결하여 파괴적 간섭을 없애는 모델 병합 기법.
+* **DARE (Drop And REscale, 무작위 드롭 및 재스케일링):** 태스크 벡터 가중치의 90% 이상을 무작위로 0으로 드롭한 뒤 남은 가중치를 스케일업하여 성능 저하 없이 다중 모델을 합성하는 기법.
+* **MoE (Mixture of Experts, 전문가 혼합 아키텍처):** 여러 개의 특화된 서브 네트워크(전문가)와 어떤 전문가에게 토큰을 보낼지 결정하는 게이팅 라우터(Router)로 구성된 고효율 모델 구조.
+* **AdamW (Adam with Decoupled Weight Decay, 가중치 감쇠 분리 아담 옵티마이저):** 모멘텀(1차 모멘트 4바이트)과 분산(2차 모멘트 4바이트)을 추적하여 가중치당 12~16바이트의 막대한 GPU 메모리를 소모하는 표준 최적화 알고리즘.

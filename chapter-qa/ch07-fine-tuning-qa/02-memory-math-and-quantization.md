@@ -2,15 +2,15 @@
 category: fine-tuning
 title: "02. 학습 메모리 수학과 수치 정밀도 및 양자화 (FP16, BF16, BitNet) (pp. 315-324)"
 source: "AI Engineering · Chapter 7 (p.315-324)"
-tags: [fine-tuning, memory-math, backpropagation, optimizer-states, activation-memory, gradient-checkpointing, fp16, bf16, quantization, bitnet-1.58b]
+tags: [fine-tuning, memory-math, activation-memory, backpropagation, optimizer-states, fp16, bf16, quantization, bitnet]
 ---
 
 # 02. 학습 메모리 수학과 수치 정밀도 및 양자화 (FP16, BF16, BitNet)
 
 ## 📌 핵심 요약 & 전체 맥락
-> **"파인튜닝의 성패는 GPU 메모리(VRAM)와의 치열한 수학적 싸움입니다."**  
-> 단순히 모델 가중치를 로드하는 추론(Inference)과 달리, 모델을 학습(Training)할 때는 **역전파(Backward Pass) 계산을 위해 가중치 외에도 그래디언트(Gradients), 옵티마이저 상태(Adam Optimizer States), 그리고 배치와 시퀀스 길이에 비례해 폭발하는 활성화 메모리(Activations)**가 필요합니다. 13B 모델을 완전 파인튜닝하려면 가중치 26GB의 수 배에 달하는 200GB 이상의 VRAM이 필요합니다.  
-> 본 섹션에서는 **추론 및 학습 메모리 정밀 계산 공식**, 활성화 메모리를 80% 절감하는 **그래디언트 체크포인팅**, 수치 오버플로를 방지하는 **부동소수점 포맷(FP32, FP16, BF16, TF32)의 비트 구조**, 그리고 행렬 곱셈을 덧셈 연산으로 대체하는 **BitNet 1.58비트 삼진 모델**을 완벽하게 정리합니다.
+> **"파인튜닝에서 GPU 메모리가 터지는(OOM, Out Of Memory) 진짜 원인은 모델 가중치가 아니라 옵티마이저 상태(Optimizer States)와 순전파 활성화 메모리(Activations)에 있습니다."**  
+> 70억 개(7B) 매개변수를 가진 모델을 16비트(2바이트)로 로드하면 가중치는 단 14GB에 불과하지만, AdamW 옵티마이저를 써서 학습을 시작하는 순간 **가중치(2B) + 그래디언트(2B) + 옵티마이저 상태(12B) = 매개변수당 최소 16바이트**가 필요하여 112GB 이상의 **GPU VRAM (Video Random Access Memory)**이 요구됩니다.  
+> 본 섹션에서는 역전파(Backpropagation) 계산 그래프에 기반한 **4대 학습 메모리 수학 공식**, 지수부(Exponent)와 가수부(Fraction)의 비트 구조로 분석하는 **부동소수점 포맷(FP32, FP16, BF16)**, 그리고 가중치를 $\{-1, 0, 1\}$ 삼진수로 극단적 압축한 **BitNet b1.58**의 원리를 완벽히 정리합니다.
 
 ---
 
@@ -20,123 +20,89 @@ tags: [fine-tuning, memory-math, backpropagation, optimizer-states, activation-m
 
 | 도표 번호 | 도표 제목 및 핵심 내용 | 책 페이지 | 본문 해당 주제 |
 | :---: | :--- | :---: | :--- |
-| **Figure 7-4** | 순전파(Forward) 및 오차 역전파(Backward)를 통한 가중치 그래디언트 업데이트 계산 그래프 | **p. 316-322** | 1. 역전파와 학습 가능 파라미터 |
-| **Figure 7-5** | 모델 가중치 메모리를 압도하는 활성화 메모리(Activations) 비중과 그래디언트 체크포인팅 효과 (Korthikanti et al., 2022) | **p. 318-325** | 2. 학습 메모리 수학과 활성화 메모리 |
-| **Figure 7-6** | 부호(Sign), 지수부(Range), 가수부(Precision) 비트 할당에 따른 FP32, FP16, BF16, TF32 포맷 비교 | **p. 320-327** | 3. 수치 표현 포맷과 정밀도 |
-| **Table 7-3** | FP32 값을 FP16, BF16, TF32로 변환할 때 발생하는 수치 오차 및 FP16 오버플로(`INF`) 실증표 | **p. 321-327** | 3. 포맷별 오버플로/언더플로 오차 |
-| **Table 7-4** | 1.58비트 삼진 $\{-1, 0, 1\}$ BitNet b1.58과 Llama 2 16비트 모델의 성능 및 메모리 비교표 | **p. 324** | 4. 극한의 양자화 (BitNet 1.58b) |
+| **Figure 7-4** | 순전파(Forward) 시 활성화값을 저장하고 역전파(Backward) 시 체인 룰을 계산하는 그래프 | **p. 316** | 1. 파인튜닝 메모리의 4대 구성 요소 |
+| **Figure 7-5** | 배치 크기와 시퀀스 길이가 증가함에 따라 가중치 메모리를 압도하는 활성화 메모리 비중 | **p. 318** | 2. 활성화 메모리(Activations)의 병목 |
+| **Figure 7-6** | 부호(Sign), 지수부(Exponent), 가수부(Fraction)로 구성된 FP32, FP16, BF16 비트 구조도 | **p. 320** | 3. 수치 정밀도와 부동소수점 포맷 |
+| **Table 7-3** | 동일한 FP32 수치 값을 FP16, BF16, INT8로 변환할 때 발생하는 반올림 오차 비교표 | **p. 321** | 3. 정밀도 포맷별 오차 및 특징 |
+| **Table 7-4** | BitNet b1.58 삼진 모델과 Llama 2 16비트 모델의 연산 속도, 메모리 절감 및 벤치마크 비교표 | **p. 324** | 4. 초저비트 양자화와 BitNet |
 
 ---
 
-## 1. 역전파(Backpropagation)와 학습 파라미터 (Figure 7-4)
+## 1. 파인튜닝 메모리의 4대 구성 요소와 수학 공식 (pp. 315 ~ 318)
 
-```mermaid
-flowchart LR
-    subgraph Forward["1. 순전파 (Forward Pass - 추론 및 손실 계산)"]
-        In["입력 (Input)"] --> W1["W1"] & W2["W2"] & W3["W3"]
-        W1 & W2 & W3 --> Act["활성화 함수 f(·)"]
-        Act --> Out["출력 (Output)"]
-        Out & Target["정답 (Ground Truth)"] --> Loss["손실 (Loss)"]
-    end
+완전 파인튜닝(Full Fine-Tuning)을 수행할 때 모델 가중치 $N$개(예: 7B = $7 \times 10^9$)에 대해 소비되는 정적 메모리는 다음과 같습니다:
 
-    subgraph Backward["2. 역전파 (Backward Pass - 그래디언트 역전파)"]
-        Loss --> GradA["Δa (활성화 그래디언트)"]
-        GradA --> GradW["Δw (가중치 그래디언트 ∂Loss/∂w)"]
-        GradW --> Opt["옵티마이저 (Adam) 가중치 업데이트"]
-    end
+```
+[ 완전 파인튜닝 시 파라미터당 정적 VRAM 소모량 (AdamW 기준) ]
+
+1. 모델 가중치 (Model Weights, 16-bit FP16/BF16) : 파라미터당 2 바이트
+2. 그래디언트 (Gradients, 16-bit FP16/BF16)       : 파라미터당 2 바이트
+3. 옵티마이저 상태 (Optimizer States, AdamW 32-bit):
+   - FP32 가중치 마스터 카피                     : 파라미터당 4 바이트
+   - 1차 모멘텀 (Momentum / Moving Average)      : 파라미터당 4 바이트
+   - 2차 모멘텀 (Variance / Squared Average)     : 파라미터당 4 바이트
+   ──────────────────────────────────────────────────────────
+   합계 (정적 상태 메모리)                        : 파라미터당 16 바이트 (16 Bytes / Param)
 ```
 
-* **동결 파라미터 (Frozen Parameters):** 가중치를 업데이트하지 않으므로 그래디언트와 옵티마이저 상태 메모리가 일체 필요 없음.
-* **학습 파라미터 (Trainable Parameters):** 역전파 시 각 파라미터마다 **그래디언트 1개 + 옵티마이저 상태 2개(Adam)**가 메모리에 유지되어야 함.
+$$\text{Static Memory (Bytes)} = N \times 16\text{ Bytes}$$
+
+* **7B 모델 기준:** $7 \times 10^9 \times 16\text{ Bytes} \approx 112\text{ GB}$ (A100 80GB GPU 1장으로 학습 불가능!)
+* **70B 모델 기준:** $70 \times 10^9 \times 16\text{ Bytes} \approx 1,120\text{ GB}$ (80GB GPU 최소 16장 필요!)
 
 ---
 
-## 2. 하드웨어 메모리 수학 (Memory Math, pp. 317 ~ 324) ⭐
+## 2. 활성화 메모리(Activations)의 병목과 그래디언트 체크포인팅 (Figure 7-5)
 
-### ① 추론 메모리 계산 공식 (Inference Memory)
-$$\text{Inference Memory} \approx N \times M \times 1.2$$
-* $N$: 모델 파라미터 수 (예: 13B)
-* $M$: 파라미터당 바이트 수 (16-bit FP16/BF16 = 2 Bytes, 8-bit INT8 = 1 Byte)
-* $1.2$: 활성화 텐서 및 어텐션 KV 캐시(Key-Value Cache)를 위한 약 20%의 추가 오버헤드
+정적 가중치 메모리 외에도, 학습 시 **순전파(Forward Pass) 과정에서 다음 레이어로 전달되는 중간 텐서 값(활성화값)**을 역전파 미분 계산을 위해 메모리에 들고 있어야 합니다:
 
-> **예시 (13B 모델 16비트 추론):**  
-> $13\text{B} \times 2\text{ Bytes} \times 1.2 = \mathbf{31.2\text{ GB}}$  
-> *(➔ 24GB VRAM을 가진 RTX 3090/4090 1장에는 로드 불가, A100 40GB 이상 필요)*
+$$\text{Activation Memory} \propto B \times S \times L \times H \times A$$
 
----
+* $B$: 배치 크기 (Batch Size)
+* $S$: 시퀀스 길이 (Sequence Length)
+* $L$: 트랜스포머 레이어 수 (Number of Layers)
+* $H$: 은닉 차원 크기 (Hidden Dimension)
+* $A$: 어텐션 헤드 수 (Number of Attention Heads)
 
-### ② 학습 메모리 계산 공식 (Training Memory)
-$$\text{Total Training Memory} = \text{Model Weights} + \text{Activations} + \text{Gradients} + \text{Optimizer States}$$
-
-| 메모리 구성 요소 | 정밀도 / 상태 개수 | 13B 모델 (FP16/BF16 혼합 정밀도) |
-| :--- | :--- | :---: |
-| **1. 모델 가중치 (Weights)** | 16-bit (2 Bytes/param) | **26 GB** |
-| **2. 그래디언트 (Gradients)** | 16-bit (2 Bytes/param) | **26 GB** |
-| **3. 옵티마이저 상태 (Adam)** | • 1차 모멘텀 $m_t$ (FP32, 4 Bytes) <br>• 2차 분산 $v_t$ (FP32, 4 Bytes) <br>• 마스터 가중치 (FP32, 4 Bytes) | **156 GB** <br>*(13B $\times$ 12 Bytes)* |
-| **고정 정적 메모리 소계** | 가중치 + 그래디언트 + Adam 상태 | **208 GB 🚨** |
+* **배치 크기와 시퀀스 길이가 늘어날 때 (Figure 7-5):**  
+  컨텍스트 길이가 4K에서 32K로 늘어나면 활성화 메모리가 수십 GB 단위로 폭증하여 가중치 메모리보다 훨씬 커집니다.
+* 💡 **그래디언트 체크포인팅 (Gradient Checkpointing, 활성화 재계산):**  
+  모든 레이어의 활성화값을 메모리에 다 저장하지 않고, 중간중간 체크포인트 레이어만 저장한 뒤, 역전파 시 필요한 활성화값을 순전파로 즉석 재계산합니다. **약 20~30%의 연산 시간이 더 걸리지만 활성화 메모리를 70~80% 이상 극적으로 절감**할 수 있습니다.
 
 ---
 
-### ③ 활성화 메모리의 폭발과 그래디언트 체크포인팅 (Figure 7-5)
-* **활성화 메모리(Activations)의 역설:**  
-  배치 크기와 시퀀스 길이가 길어지면 트랜스포머 레이어마다 역전파를 위해 저장해 두는 중간 텐서(활성화 값)가 **가중치 메모리의 2~3배(100GB 이상)로 폭증**합니다 (Figure 7-5 초록색 막대).
-* 💡 **그래디언트 체크포인팅 (Gradient Checkpointing / Activation Recomputation):**  
-  순전파 때 중간 활성화 값을 GPU 메모리에 보관하지 않고 버린 뒤, **역전파가 진행될 때 해당 레이어의 순전파를 즉석에서 다시 계산(Recomputation)**합니다.  
-  ➔ **활성화 메모리를 70~80% 절감**하여 OOM(Out Of Memory)을 방지하지만, 계산량이 늘어나 학습 속도가 약 20% 느려지는 트레이드오프가 있습니다.
+## 3. 수치 정밀도와 부동소수점 포맷 (Figure 7-6, Table 7-3, pp. 319 ~ 322)
 
----
+부동소수점 숫자는 **부호(Sign, 1비트)**, **지수부(Exponent, 수의 표현 범위 결정)**, **가수부(Fraction/Mantissa, 수의 정밀도 결정)**의 3요소로 구성됩니다:
 
-## 3. 수치 표현 포맷과 정밀도 오차 (Figure 7-6, Table 7-3)
+```
+[ 주요 부동소수점 비트 포맷 구조 (Figure 7-6) ]
 
-컴퓨터 부동소수점 포맷: $\text{Value} = (-1)^{\text{Sign}} \times 2^{\text{Exponent} - \text{Bias}} \times (1 + \text{Fraction})$
-
-```mermaid
-flowchart TD
-    subgraph Formats["부동소수점 비트 구성 비교 (Figure 7-6)"]
-        FP32["FP32 (Single Precision - 32 bits)\n[1 Sign] + [8 Exponent (범위 1e-38 ~ 3e+38)] + [23 Fraction (정밀도)]"]
-        FP16["FP16 (Half Precision - 16 bits)\n[1 Sign] + [5 Exponent (범위 6e-8 ~ 65,504)] + [10 Fraction]"]
-        BF16["BF16 (Bfloat16 - 16 bits) 🏆\n[1 Sign] + [8 Exponent (범위 1e-38 ~ 3e+38!)] + [7 Fraction]"]
-        TF32["TF32 (TensorFloat-32 - 19 bits)\n[1 Sign] + [8 Exponent] + [10 Fraction]"]
-    end
+• FP32 (32-bit) : [ 부호 1비트 ] [ 지수부 8비트 ] [ 가수부 23비트 ] ➔ 초고정밀도
+• FP16 (16-bit) : [ 부호 1비트 ] [ 지수부 5비트 ] [ 가수부 10비트 ] ➔ 지수부가 작아 언더플로/오버플로 취약
+• BF16 (16-bit) : [ 부호 1비트 ] [ 지수부 8비트 ] [ 가수부 7비트 ]  ➔ FP32와 동일한 지수부로 안정적 학습
 ```
 
-### ⚠️ 포맷 변환 시 발생하는 치명적 오차 실증 (Table 7-3)
-
-| 원본 FP32 값 | FP16 변환값 | BF16 변환값 | TF32 변환값 | 분석 및 특이사항 |
-| :---: | :---: | :---: | :---: | :--- |
-| `0.0123456789` | `0.012344360` | `0.0123291` | `0.012344360` | 가수부 절삭으로 인한 미세 정밀도 손실 |
-| `1234.56789` | `1235.0` | `1232.0` | `1234.0` | 큰 수치에서의 반올림 오차 |
-| **`123456.789`** | **`INF` (오버플로 🚨)** | **`123392.0`** | **`123456.0`** | **FP16의 최대 표현 범위(65,504) 초과로 무한대 발산!** |
-
-* 💡 **왜 현대 LLM 학습은 FP16 대신 BF16을 사용하는가?**  
-  FP16은 지수부가 5비트뿐이라 가중치나 그래디언트가 65,504를 넘어가면 즉시 `NaN / INF`로 모델이 붕괴합니다. **BF16은 지수부가 FP32와 동일한 8비트**여서 수치 오버플로가 일체 발생하지 않는 딥러닝 표준 포맷입니다.
+| 포맷 | 총 비트 수 | 지수부 (Range) | 가수부 (Precision) | 장단점 및 실무 적용 |
+| :--- | :---: | :---: | :---: | :--- |
+| **FP32** | 32 bits | 8 bits | 23 bits | 최고 정밀도, 그러나 메모리와 연산 비용이 2배 |
+| **FP16** | 16 bits | 5 bits | 10 bits | 가수부가 커서 정밀하지만 지수부가 작아 학습 도중 발산(NaN) 위험 |
+| **BF16** | 16 bits | 8 bits | 7 bits | **현대 LLM 학습의 표준 🏆** (Google Brain 개발, 넓은 표현 범위로 수치적 안정성 보장) |
 
 ---
 
-## 4. 양자화 전략의 두 갈래와 극한의 양자화 (Table 7-4)
+## 4. 초저비트 양자화와 BitNet b1.58 (Table 7-4, pp. 323 ~ 324)
 
-양자화(Quantization)는 메모리와 연산량을 줄이기 위해 FP16 같은 고정밀도 가중치를 INT8이나 4비트로 압축하는 기술입니다. 실무에서는 언제 양자화를 수행하느냐에 따라 두 가지 전략으로 나뉩니다:
-1. **학습 후 양자화 (Post-Training Quantization, PTQ):**  
-   가장 널리 쓰이는 방식으로, 완전히 학습이 끝난 모델의 가중치를 사후에 압축합니다. 구현이 매우 쉽고 코드를 거의 수정할 필요가 없지만, 압축 과정에서 발생하는 오차로 인해 성능이 약간 저하될 수 있습니다. (예: QLoRA의 NF4 양자화)
-2. **양자화 인지 학습 (Quantization-Aware Training, QAT):**  
-   학습 과정 중에 양자화 오차를 시뮬레이션하여 모델이 오차에 스스로 적응하도록 훈련합니다. 구현이 복잡하고 학습 비용이 증가하지만, 양자화 이후에도 원본 모델과 거의 동일한 최상의 추론 성능을 보장합니다.
-
-### 🚀 극한의 양자화: BitNet 1.58비트 삼진 모델
-* **BitNet b1.58 (Microsoft Research, 2024):**  
-  모든 가중치 파라미터를 $\{-1, 0, 1\}$ 세 가지 값으로만 제한 ($\log_2(3) \approx 1.58\text{ bits}$).
-
-| 모델 및 정밀도 | 상식 추론 (ARC / HellaSwag 등) | 메모리 소모량 (VRAM) | 에너지 연산 효율 |
-| :--- | :---: | :---: | :---: |
-| **Llama 2 (3.9B, 16-bit)** | 54.2% | 기준점 (7.8 GB) | 곱셈 연산(FP MAC) 필요 |
-| **BitNet b1.58 (3.9B, 1.58-bit)** | **54.8% (동등 이상!)** | **~1.1 GB (약 85% 절감 🚀)** | **순수 정수 덧셈/뺄셈(Addition)만 수행** |
-
-* **엔지니어링 혁신:**  
-  부동소수점 행렬 곱셈을 완전히 제거하고 **덧셈과 부호 반전만으로 인퍼런스를 수행**하여, 디바이스의 발열과 전력 소모를 획기적으로 낮춥니다.
+* **양자화 (Quantization):**  
+  32비트나 16비트 부동소수점 가중치를 8비트 정수(INT8)나 4비트 정수(INT4)로 변환하여 메모리를 $1/2 \sim 1/4$로 압축하고 연산 속도를 가속하는 기법.
+* 🚀 **BitNet b1.58 (Microsoft, 2024, Table 7-4):**  
+  모든 가중치를 부동소수점이 아닌 **$\{-1, 0, 1\}$ 삼진수(Ternary, 1.58비트)**로만 표현하는 혁신적인 아키텍처.
+  * **곱셈 연산의 완전 제거:** 행렬 곱셈($W \times X$)을 비싼 부동소수점 곱셈 대신 **단순 덧셈과 뺄셈(Integer Addition)**으로만 처리하여 에너지 소비를 획기적으로 줄이고 추론 속도를 2~3배 가속합니다.
 
 ---
 
 ## 🔗 연관 문서
 * [[00-ch07-overview|00. Chapter 7 전체 개요 및 목차]]
 * [[01-finetuning-foundations-and-decision-framework|01. 파인튜닝 기초와 엔지니어링 의사결정 프레임워크]]
-* [[03-peft-lora-and-qlora|03. 매개변수 효율적 파인튜닝(PEFT)과 LoRA]]
-* [[04-model-merging-and-weight-arithmetic|04. 모델 병합과 가중치 산술 연산]]
+* [[03-peft-lora-and-qlora|03. 매개변수 효율적 파인튜닝(PEFT)과 LoRA / QLoRA]]
+* [[chapter-qa/ch09-inference-optimization-qa/01-inference-fundamentals-and-hardware-math|Ch09-01. 추론 기초, 루프라인 모델 및 하드웨어 수학]]

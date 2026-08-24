@@ -10,7 +10,7 @@ tags: [datasets, data-engineering, lima-hypothesis, synthetic-data, self-instruc
 ## 📌 챕터 핵심 요약 (Executive Summary)
 > **"최고의 머신러닝 팀과 무한한 컴퓨팅 파워가 있어도 고품질 데이터가 없으면 좋은 모델을 만들 수 없다."**  
 > 파운데이션 모델 생태계가 성숙해짐에 따라 모델 아키텍처는 점차 표준화(Standardized)되고 있으며, 엔터프라이즈 AI의 진정한 경쟁 우위는 **"어떤 고품질 데이터를 구축하고 정제했는가(Data-Centric AI)"**로 완전히 이동했습니다.  
-> 50,000개의 노이즈 데이터보다 엄선된 1,000개의 데이터가 훨씬 우수한 정렬 성능을 낸다는 **LIMA 가설(Less Is More for Alignment)**부터, GPT-4를 활용한 **자가 지시 학습(Self-Instruct) 및 합성 데이터(Synthetic Data) 생성**, 합성 데이터의 재귀적 학습이 모델 붕괴를 초래하는 **모델 붕괴(Model Collapse)** 위험성, 그리고 중복 데이터 제거(MinHash)와 채팅 템플릿 포맷팅까지 **데이터 엔지니어링의 전체 라이프사이클**을 심층적으로 다룹니다.
+> 50,000개의 노이즈 데이터보다 엄선된 1,000개의 데이터가 훨씬 우수한 정렬 성능을 낸다는 **LIMA 가설 (Less Is More for Alignment)**부터, GPT-4를 활용한 **자가 지시 학습 (Self-Instruct) 및 합성 데이터 (Synthetic Data) 생성**, 합성 데이터의 재귀적 학습이 모델 붕괴를 초래하는 **모델 붕괴 (Model Collapse)** 위험성, 그리고 중복 데이터 제거(MinHash LSH)와 채팅 템플릿 포맷팅까지 **데이터 엔지니어링의 전체 라이프사이클**을 심층적으로 다룹니다.
 
 ---
 
@@ -48,10 +48,14 @@ mindmap
 
 ---
 
-## 🎯 챕터 핵심 질문 (Key Takeaways Preview)
-1. **LIMA(Less Is More for Alignment) 가설이란 무엇이며, 왜 5만 개의 데이터보다 1천 개의 데이터가 더 우수한가?**
-2. **사전 학습(Pre-training)과 파인튜닝(Fine-tuning)에서 요구되는 데이터 다양성(Coverage)의 차이는 무엇인가?**
-3. **Self-Instruct 프레임워크는 어떤 원리로 소수의 Seed 데이터로부터 수만 개의 지시 데이터셋을 합성해내는가?**
-4. **합성 데이터(Synthetic Data)를 반복적으로 재귀 학습시켰을 때 발생하는 '모델 붕괴(Model Collapse)'의 수학적 원인은 무엇인가?**
-5. **학습 데이터에 중복(Duplicates)이 존재할 때 모델이 특정 출력으로 편향되는 이유는 무엇이며, 이를 방지하는 MinHash 기법은 어떻게 작동하는가?**
-6. **프롬프트 손실 가중치(Prompt Loss Weight)는 왜 0~10%로 낮게 마스킹해야 하는가?**
+## 💡 주요 축약어 원문 및 해설 사전 (Abbreviations Glossary)
+
+* **LIMA (Less Is More for Alignment, 정렬을 위한 소량 고품질 데이터 가설):** 거대 언어 모델의 지식과 능력은 사전 훈련 단계에서 이미 대부분 학습되므로, 지시 정렬(Alignment) 단계에서는 수만 개의 거친 데이터보다 단 1,000개의 완벽하게 정제된 고품질 데이터만으로도 뛰어난 성능을 낼 수 있다는 이론 (Zhou et al., 2023).
+* **SFT (Supervised Fine-Tuning, 지도 미세조정):** 모델에게 입력 지시문과 이상적인 모범 응답 쌍을 제공하여 인간의 의도에 맞게 출력하도록 학습시키는 파인튜닝 단계.
+* **EDA (Exploratory Data Analysis, 탐색적 데이터 분석):** 훈련에 들어가기 전 데이터의 단어 분포, 토큰 길이, 품사(동사-명사) 구성, 결측치 등을 시각화하고 통계적으로 분석하는 탐색 작업.
+* **LSH (Locality-Sensitive Hashing, 위치 민감 해싱):** 내용이 비슷한 두 텍스트가 높은 확률로 동일한 해시 버킷(Bucket)에 충돌하도록 설계하여 대규모 코퍼스에서 고속으로 유사 중복 데이터를 찾아내는 알고리즘.
+* **MinHash (Minimum Hashing, 최소 해싱):** 두 문서 간의 자카드 유사도(Jaccard Similarity)를 $N$-gram 집합의 최소 해시값 일치 비율로 초고속 추정하는 기법.
+* **PPL (Perplexity, 퍼플렉서티 / 당혹도):** 언어 모델이 주어진 텍스트를 얼마나 자연스럽게 느끼는지(놀라는 정도)를 나타내는 정보 이론 척도로, 비정상적인 스팸 텍스트나 기계 생성 쓰레기 데이터를 필터링하는 데 활용.
+* **CDA (Counterfactual Data Augmentation, 반사실적 데이터 증강):** 텍스트 내의 성별, 인종, 직업 등 편향 유발 단어를 반대 속성(예: '의사 그' ➔ '의사 그녀')으로 치환한 대조 샘플을 생성하여 모델의 사회적 편향을 완화하는 데이터 증강 기법.
+* **JSONL (JSON Lines, 줄 단위 JSON 포맷):** 대규모 데이터셋을 한 줄에 하나의 유효한 JSON 객체로 저장하여 메모리에 전체 파일을 올리지 않고도 스트리밍 방식으로 처리할 수 있는 표준 데이터 저장 포맷.
+* **PII (Personally Identifiable Information, 개인 식별 정보):** 이름, 주민번호, 이메일, 전화번호 등 개인을 특정할 수 있는 민감 정보로, 학습 데이터셋에서 반드시 사전에 마스킹 및 제거되어야 함.

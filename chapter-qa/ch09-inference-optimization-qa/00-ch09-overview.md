@@ -10,8 +10,8 @@ tags: [inference-optimization, roofline-model, prefill-vs-decode, kv-cache, flas
 ## 📌 챕터 핵심 요약 (Executive Summary)
 > **"모델 학습이 '지능을 만드는 일'이라면, 추론 최적화는 '그 지능을 실제 비즈니스로 지속 가능하게 만드는 일'이다."**  
 > 생성형 AI 서비스의 성패는 사용자 경험을 결정짓는 **지연시간(TTFT, ITL)**과 서비스의 경제성을 결정짓는 **비용 및 처리량(Throughput, Goodput)**에 달려 있습니다.  
-> LLM 추론은 **병렬 연산 위주의 프리필(Prefill: Compute-bound) 단계**와 **가중치 로딩 위주의 디코딩(Decode: Memory bandwidth-bound) 단계**라는 완전히 상이한 두 국면으로 진행됩니다.  
-> 본 챕터에서는 **루프라인 모델(Roofline Model)**을 기반으로 한 하드웨어 한계 분석부터, 메모리 병목을 극복하는 **KV 캐시와 PagedAttention**, IO 연산을 획기적으로 줄인 **FlashAttention(SRAM 타일링)**, 처리량을 10배 이상 끌어올리는 **연속 배치(Continuous/In-flight Batching)**, 무손실 2~3배 가속을 달성하는 **추측 디코딩(Speculative Decoding)**, 비용을 90% 절감하는 **프롬프트 캐싱(Prompt Caching)**, 그리고 수십 대의 GPU를 묶는 **텐서/파이프라인 병렬화(TP, PP)**까지 현존하는 모든 서빙 최적화 기법을 완벽히 정리합니다.
+> LLM 추론은 **병렬 연산 위주의 프리필 (Prefill: Compute-bound) 단계**와 **가중치 로딩 위주의 디코딩 (Decode: Memory bandwidth-bound) 단계**라는 완전히 상이한 두 국면으로 진행됩니다.  
+> 본 챕터에서는 **루프라인 모델 (Roofline Model)**을 기반으로 한 하드웨어 한계 분석부터, 메모리 병목을 극복하는 **KV 캐시와 PagedAttention**, IO 연산을 획기적으로 줄인 **FlashAttention (SRAM 타일링)**, 처리량을 10배 이상 끌어올리는 **연속 배치 (Continuous / In-flight Batching)**, 무손실 2~3배 가속을 달성하는 **추측 디코딩 (Speculative Decoding)**, 비용을 90% 절감하는 **프롬프트 캐싱 (Prompt Caching)**, 그리고 수십 대의 GPU를 묶는 **텐서 / 파이프라인 병렬화 (TP, PP)**까지 현존하는 모든 서빙 최적화 기법을 완벽히 정리합니다.
 
 ---
 
@@ -47,11 +47,18 @@ mindmap
 
 ---
 
-## 🎯 챕터 핵심 질문 (Key Takeaways Preview)
-1. **왜 LLM 추론에서 첫 토큰 생성(Prefill: TTFT)은 연산 집약적(Compute-bound)이고, 이후 토큰 생성(Decode: ITL)은 메모리 대역폭 집약적(Memory-bound)인가?**
-2. **루프라인 모델(Roofline Model)에서 연산 집약도(Arithmetic Intensity)의 임계점(Turning Point)은 무엇을 의미하는가?**
-3. **KV 캐시는 왜 디코딩 속도를 획기적으로 높이지만 동시에 막대한 GPU VRAM을 잠식하는가?**
-4. **FlashAttention은 부동소수점 연산량을 줄이지 않고 어떻게 HBM 입출력(IO) 병목만을 제거하여 2~4배의 가속을 달성하는가?**
-5. **정적 배칭(Static Batching)의 패딩 낭비와 긴 응답 블로킹 문제를 해결한 연속 배칭(Continuous Batching)의 원리는 무엇인가?**
-6. **추측 디코딩(Speculative Decoding)은 작은 드래프트 모델을 사용하면서도 어떻게 큰 타겟 모델과 100% 동일한 수학적 무손실 출력을 보장하는가?**
-7. **텐서 병렬화(TP)와 파이프라인 병렬화(PP)는 모델 가중치를 어떻게 분할하며, 각각 어떤 통신 오버헤드(All-Reduce vs P2P)를 갖는가?**
+## 💡 주요 축약어 원문 및 해설 사전 (Abbreviations Glossary)
+
+* **TTFT (Time To First Token, 첫 토큰 생성 지연시간):** 사용자가 프롬프트를 전송한 후 언어 모델이 첫 번째 출력 글자(토큰)를 렌더링할 때까지 걸리는 시간으로, 프리필(Prefill) 연산 속도에 의해 결정됨.
+* **ITL (Inter-Token Latency, 토큰 간 생성 지연시간 / TPOT):** 첫 토큰이 나온 이후 다음 글자가 하나씩 생성되는 간격 시간(ms/token)으로, 디코딩(Decode) 메모리 대역폭에 의해 결정됨.
+* **TPOT (Time Per Output Token, 출력 토큰당 생성 시간):** ITL과 동의어로, 모델이 1개의 출력 토큰을 뱉어내는 데 걸리는 평균 지연시간.
+* **MFU (Model FLOPs Utilization, 모델 연산력 활용도):** GPU 하드웨어가 낼 수 있는 이론상 최대 연산 속도(Peak FLOPs) 대비 모델이 실제 유의미하게 활용한 연산량의 비율.
+* **MBU (Memory Bandwidth Utilization, 메모리 대역폭 활용도):** GPU 하드웨어의 이론상 최대 메모리 전송 속도 대비 실제 가중치 및 KV 캐시를 읽어오는 데 사용된 대역폭의 비율.
+* **KV Cache (Key-Value Cache, 키-값 캐시):** 이전 스텝들에서 계산된 트랜스포머 어텐션의 Key와 Value 벡터를 GPU VRAM에 저장해 두어, 다음 단어를 예측할 때 이전 토큰들을 중복 재계산하지 않도록 방지하는 메모리 구조.
+* **vLLM (Virtual Large Language Model):** 운영체제의 가상 메모리 페이징 기법을 차용하여 KV 캐시 메모리 낭비(단편화)를 거의 0%로 줄인 고성능 LLM 서빙 프레임워크 (PagedAttention 기반).
+* **SRAM (Static Random-Access Memory, GPU 정적 메모리):** GPU 칩 내부에 위치하여 대역폭이 19TB/s에 달할 정도로 극도로 빠르지만 용량이 수십~수백 MB로 매우 작은 온칩(On-chip) 메모리.
+* **HBM (High Bandwidth Memory, 고대역폭 메모리):** GPU 칩 옆에 쌓아 올린 주 메모리(VRAM)로 용량이 수십 GB로 크지만 SRAM에 비해 데이터 전송 속도가 느린 메모리.
+* **TP (Tensor Parallelism, 텐서 병렬화):** 단일 레이어의 거대 행렬(Attention 및 FFN)을 여러 GPU로 가로/세로로 쪼개어 동시에 연산한 뒤 결과를 합치는 모델 병렬화 기법 (Megatron-LM 방식).
+* **PP (Pipeline Parallelism, 파이프라인 병렬화):** 모델의 레이어들을 여러 층위로 나누어 서로 다른 GPU에 순차적으로 배치하고 마이크로배치(1F1B)로 실행하는 분산 서빙 기법.
+* **SLO (Service Level Objective, 서비스 수준 목표):** 서비스 운영팀이 달성하기로 약속한 정량적 성능 기준(예: "모든 요청의 99%는 TTFT가 200ms 이하여야 한다").
+* **Goodput (유효 처리량):** 전체 처리된 토큰/요청 중 사전에 정의된 서비스 수준 목표(SLO)를 만족하면서 성공적으로 반환된 유효 처리량.
