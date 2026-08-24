@@ -1,16 +1,16 @@
 ---
 category: evaluation
-title: "03. 공개 벤치마크 탐색과 3대 치명적 함정 (pp. 191-199)"
+title: "03. 공개 벤치마크 탐색과 4대 치명적 함정 (pp. 191-199)"
 source: "AI Engineering · Chapter 4 (p.191-199)"
-tags: [evaluation, public-benchmarks, open-llm-leaderboard, helm, data-contamination, benchmark-saturation, goodharts-law, prompt-sensitivity]
+tags: [evaluation, public-benchmarks, open-llm-leaderboard, helm, data-contamination, benchmark-saturation, goodharts-law, prompt-sensitivity, domain-relevance]
 ---
 
-# 03. 공개 벤치마크 탐색과 3대 치명적 함정
+# 03. 공개 벤치마크 탐색과 4대 치명적 함정
 
 ## 📌 핵심 요약 & 전체 맥락
 > **"벤치마크가 공개되는 순간, 그 벤치마크는 더 이상 객관적인 시험지가 될 수 없다."**  
 > Hugging Face Open LLM Leaderboard나 Stanford HELM 같은 공개 벤치마크는 수많은 모델 중 유력 후보를 빠르게 1차 압축(Shortlist)하는 데 매우 유용합니다.  
-> 그러나 공개 벤치마크는 **초고속 만점 포화(Saturation)**, 웹 크롤링으로 시험 문제가 학습셋에 섞여 들어가는 **데이터 오염(Data Contamination)**, 그리고 프롬프트 포맷 하나에 점수가 요동치는 **벤치마크 게이밍(Gaming)**이라는 3대 함정에 빠져 있습니다.  
+> 그러나 공개 벤치마크는 **초고속 만점 포화(Saturation)**, 웹 크롤링으로 시험 문제가 학습셋에 섞여 들어가는 **데이터 오염(Data Contamination)**, 프롬프트 포맷 하나에 점수가 요동치는 **벤치마크 게이밍(Gaming)**, 그리고 실제 비즈니스 환경을 대변하지 못하는 **도메인 괴리(Lack of Domain Relevance)**라는 4대 함정에 빠져 있습니다.  
 > *"시험 문제를 통째로 외운 1M짜리 미니 모델이 GPT-4를 이긴다"*는 실증 연구처럼, 공개 리더보드 순위는 1차 참고용일 뿐이며 **반드시 사내 실제 데이터셋으로 독립적인 검증을 수행**해야 합니다.
 
 ---
@@ -69,7 +69,7 @@ Stanford & UC Berkeley 연구진(Chen et al., 2023)은 GPT-4가 2023년 3월 버
 
 ---
 
-## 3. 공개 벤치마크의 3대 치명적 함정 (pp. 197 ~ 199)
+## 3. 공개 벤치마크의 4대 치명적 함정 (pp. 197 ~ 199)
 
 ---
 
@@ -100,6 +100,12 @@ Stanford & UC Berkeley 연구진(Chen et al., 2023)은 GPT-4가 2023년 3월 버
 * **프롬프트 서식 민감도 (Format Sensitivity):**  
   지시문 끝에 마침표를 찍느냐 마느냐, 보기 번호를 `(A)`로 하느냐 `1.`로 하느냐, Few-shot 예시의 순서를 어떻게 배치하느냐에 따라 **동일한 모델의 벤치마크 점수가 10~20%씩 널뛰기**합니다.
 * 모델 개발사들은 리더보드 순위를 올리기 위해 모델이 가장 높은 점수를 받는 프롬프트 포맷을 찾아 점수를 조작(Gaming)하는 유혹에 빠집니다.
+
+---
+
+### ④ 비즈니스 도메인과의 괴리 (Lack of Domain Relevance)
+* MMLU나 HELM 같은 범용 벤치마크는 일반적인 상식이나 수학/코딩 능력을 측정할 뿐, 실제 기업의 **고유한 비즈니스 유스케이스(예: 사내 기밀 문서 요약, 특수 산업군 챗봇, 사투리 인식 등)의 성능을 전혀 대변하지 못합니다.**
+* **해결책:** 결국 공개 리더보드는 수많은 모델 중 유력 후보군(Shortlist)을 추려내는 **1차 필터링 용도**로만 사용해야 하며, 최종 결정은 반드시 우리 비즈니스 데이터로 직접 구축한 '사내 평가 파이프라인(Custom Evaluation Pipeline)'을 통해 내려야 합니다.
 
 ---
 
