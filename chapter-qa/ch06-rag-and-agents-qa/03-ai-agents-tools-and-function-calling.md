@@ -8,8 +8,8 @@ tags: [agents, ai-agents, swe-agent, function-calling, tool-use, decoupled-plann
 # 03. AI 에이전트 기초와 도구 활용 및 함수 호출 (Function Calling)
 
 ## 📌 핵심 요약 & 전체 맥락
-> **"파운데이션 모델이 '지식과 추론'을 담당한다면, 도구(Tools)와 에이전트(Agents)는 모델에게 '현실 세계를 변화시키는 손과 발'을 달아주는 것입니다."**  
-> AI 에이전트는 사용자의 목표(Goal)와 제약 조건(Constraints)을 입력받아 환경(Environment)을 관찰하고, 스스로 계획(Plan)을 세워 외부 도구(APIs, Python 인터프리터, SQL DB)를 실행하여 작업을 자율 완수하는 지능형 시스템입니다 (SWE-agent).  
+> **"파운데이션 모델이 뇌(Brain) 안에서만 생각하는 '철학자'라면, 도구(Tools)와 에이전트(Agents)는 직접 손발을 움직여 현실 세계를 바꾸는 '로봇 팔'을 달아주는 것입니다."**  
+> AI 에이전트는 사용자의 목표(Goal)를 듣고 스스로 상황(Environment)을 파악한 뒤, 계획(Plan)을 세우고 외부 도구(API(Application Programming Interface), Python 코드 실행, SQL DB 접근 등)를 자유자재로 사용하여 주어진 임무를 끝까지 자율 완수하는 똑똑한 비서입니다 (예: 스스로 코딩 버그를 고치는 SWE(Software Engineering)-agent).  
 > 무분별한 도구 실행으로 인한 비용 폭증과 시스템 파괴를 방지하기 위해, **계획 수립(Planner)과 도구 실행(Executor)을 분리(Decoupling)하여 사전 검증(Evaluator)을 거치는 멀티 에이전트 아키텍처**를 설계해야 합니다.  
 > 또한 얀 르쿤(Yann LeCun) 교수의 *"자기회귀 LLM은 본질적으로 계획을 세울 수 없다"*는 비판과, 이를 극복하기 위한 **월드 모델(World Model) 및 상태 추적(State-Tracking) 트리 탐색**의 최신 이론을 심층적으로 다룹니다.
 
@@ -70,6 +70,8 @@ flowchart LR
 
 ### ② 함수 호출 (Function Calling) 메커니즘 (Figure 6-10)
 
+함수 호출은 **자판기(API)의 버튼을 직접 누를 수 없는 사장님(LLM)이 비서(앱 런타임)에게 "커피 뽑아와"라고 아주 정확한 양식(JSON)의 주문서를 써서 넘겨주는 과정**과 같습니다.
+
 ```mermaid
 sequenceDiagram
     participant User as 사용자
@@ -79,7 +81,7 @@ sequenceDiagram
 
     User->>App: "지난주 가장 많이 팔린 상품 가격이 얼마야?"
     App->>LLM: 질문 + 도구 JSON Schema 전달 (get_today_date, fetch_top_products 등)
-    LLM-->>App: 함수 호출 명령 반환: {"name": "get_today_date", "arguments": {}}
+    LLM-->>App: JSON 주문서(함수 호출 명령) 반환: {"name": "get_today_date", "arguments": {}}
     App->>Tool: get_today_date() 실행
     Tool-->>App: 결과 반환: "2030-09-13"
     App->>LLM: 이전 대화 + 도구 실행 결과("2030-09-13") 전달
@@ -124,8 +126,8 @@ flowchart TD
     Evaluator -- "최종 목표 완수" --> Finish(["작업 종료 (Finish)"])
 ```
 
-* **병렬 계획 수립 (Parallel Planning):** 지연시간을 줄이기 위해 생성기(Planner)가 여러 개의 계획 후보를 동시에 생성하고, 검증기(Evaluator)가 가장 유망한 1개를 선택하여 실행.
-* **의도 분류(Intent Classifier)의 역할:** 불가능하거나 범위를 벗어난 요청(Out-of-Scope)을 사전에 `IRRELEVANT`로 분류하여 헛된 연산(FLOPs 낭비)을 차단.
+* **병렬 계획 수립 (Parallel Planning):** 지연시간(Latency)을 줄이기 위해 계획기(Planner)가 3~4개의 각기 다른 작전 후보를 동시에 짜오면, 검증기(Evaluator)가 꼼꼼히 따져보고 가장 안전하고 완벽한 작전 1개만 채택하여 실행합니다.
+* **의도 분류기(Intent Classifier) 방패:** 아예 불가능하거나 범위를 벗어난 엉뚱한 요청을 사전에 차단하여, 비싼 서버 연산력(FLOPs) 낭비와 불필요한 도구 오작동을 막습니다.
 
 ---
 
@@ -139,7 +141,7 @@ flowchart TD
 | **"LLM은 계획할 수 있다" ✅** | **Hao et al.** (2023) <br>*(Planning with World Model)* | • 방대한 인터넷 지식을 학습한 LLM은 각 행동에 따른 **결과 상태를 예측하는 '월드 모델(World Model)' 역할 수행 가능** <br>• 자가 반성 및 상태 추적 도구와 결합하면 강력한 탐색 플래너로 진화 |
 
 * **엔지니어링 결론:**  
-  LLM 단독으로는 계획 수립에 한계가 있을 수 있으나, **탐색 알고리즘(MCTS, Beam Search)과 상태 검증기(Verifier)를 결합한 시스템 아키텍처**를 구축함으로써 실무에서 작동하는 강력한 에이전트를 완성할 수 있습니다.
+  LLM의 뇌 하나만 덜렁 놔두면 계획 수립에 한계가 있을 수 있습니다. 그러나 체스나 바둑 AI처럼 수천 개의 미래의 수를 앞서 탐색하는 **MCTS (Monte Carlo Tree Search, 몬테카를로 트리 탐색)** 알고리즘과 상태 검증기를 영리하게 결합하면, 실무에서 소름 돋을 정도로 완벽하게 작동하는 강력한 에이전트를 완성할 수 있습니다.
 
 ---
 
