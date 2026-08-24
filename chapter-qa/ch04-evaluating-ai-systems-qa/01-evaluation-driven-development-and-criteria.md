@@ -81,9 +81,15 @@ tags: [evaluation, edd, evaluation-driven-development, safe, truthfulqa, ifeval,
 
 ## 2. 7대 평가 기준 심층 분석 (pp. 163 ~ 178)
 
+### ① 도메인 특화 성능 (Domain-Specific Capability) ⭐ (가장 중요)
+* **범용 벤치마크의 함정:** MMLU 같은 범용 지식 벤치마크 점수가 아무리 높아도, 내 비즈니스 애플리케이션의 성공을 보장하지 않습니다.
+* **도메인별 맞춤 지표:** 평가의 첫 번째 기둥은 '내 비즈니스 목적에 맞는 평가 기준'을 세우는 것입니다.
+  * 예: **의료/법률 AI**는 '재현율(Recall, 빠뜨리는 정보가 없는지)'과 보수적인 답변이 중요합니다.
+  * 예: **추천 AI**는 '정밀도(Precision)'와 창의적인 답변이 중요합니다.
+
 ---
 
-### ① 환각 및 사실성 평가: Google SAFE & TruthfulQA (pp. 167 ~ 170)
+### ② 환각 및 사실성 평가: Google SAFE & TruthfulQA (pp. 167 ~ 170)
 
 ```mermaid
 flowchart LR
@@ -104,7 +110,7 @@ flowchart LR
 
 ---
 
-### ② 편향 및 안전성 평가: 정치 성향과 Llama Guard (pp. 170 ~ 173)
+### ③ 편향 및 안전성 평가: 정치 성향과 Llama Guard (pp. 170 ~ 173)
 * **정치적/경제적 편향 (Figure 4-3, Feng et al. 2023):**  
   동일한 사회적 이슈(낙태, 세금, 총기 규제 등)에 대해 **모델마다 진보(Left)/보수(Right), 자유주의(Libertarian)/권위주의(Authoritarian) 성향이 뚜렷하게 나뉨**. 기업의 브랜드 가치관에 맞는 모델 선택이 필요함.
 * **안전성 가드레일 (Meta Llama Guard):**  
@@ -112,7 +118,7 @@ flowchart LR
 
 ---
 
-### ③ 지시 이행 능력: IFEval (Instruction Following, pp. 173 ~ 175)
+### ④ 지시 이행 능력: IFEval (Instruction Following, pp. 173 ~ 175)
 자연어의 주관적 평가를 배제하고, **프로그래밍 코드로 100% 엄격하게 정답 여부를 자동 검증(Verifiable)**할 수 있는 벤치마크입니다.
 
 | 지시 제약 조건 유형 | 실제 프롬프트 지시 예시 | 자동 검증 방식 (Verification) |
@@ -127,14 +133,14 @@ flowchart LR
 
 ---
 
-### ④ 롤플레잉 및 페르소나 일관성 (pp. 175 ~ 177)
+### ⑤ 롤플레잉 및 페르소나 일관성 (pp. 175 ~ 177)
 * LMSYS 100만 대화 분석(**Figure 4-4**)에서 롤플레잉은 **전체 사용처 중 8위**를 차지할 정도로 매우 흔한 유스케이스입니다 (게임 NPC, 상담 챗봇, 글쓰기 멘토).
 * **음성적 지식 차단 (Negative Knowledge Check, 각주 8) ⭐:**  
   성룡(Jackie Chan) 역할을 맡은 AI가 유창한 베트남어를 구사하거나, 판타지 게임의 초반 NPC가 게임 결말의 스포일러를 알고 대답하면 롤플레잉이 깨집니다. **"그 캐릭터가 몰라야 마땅한 지식을 AI가 누설하지 않는지"**를 반드시 평가해야 합니다.
 
 ---
 
-### ⑤ 장문 컨텍스트 평가와 "Lost in the Middle" 현상 (NIAH)
+### ⑥ 장문 컨텍스트 평가와 "Lost in the Middle" 현상 (NIAH)
 * **건초더미 속 바늘 찾기 (Needle In A Haystack, NIAH):**  
   모델이 100K~1M 토큰 이상의 엄청난 컨텍스트 창을 지원하더라도, 방대한 무관한 텍스트(건초더미) 속에 숨겨진 핵심 정보(바늘)를 제대로 찾아오는지 테스트하는 극한의 검색 능력 평가.
 * **"Lost in the Middle" 현상의 치명적 한계:**  
@@ -144,7 +150,7 @@ flowchart LR
 
 ---
 
-### ⑥ 지연시간(Latency)과 비용의 파레토 최적화 (pp. 177 ~ 178)
+### ⑦ 지연시간(Latency)과 비용(Cost)의 파레토 최적화 (pp. 177 ~ 178)
 
 ```
 [ LLM 3대 지연시간 메트릭 ]
