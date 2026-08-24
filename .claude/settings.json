@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/skills/deep-tutor/scripts/check-note-hook.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
