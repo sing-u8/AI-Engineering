@@ -194,21 +194,41 @@ flowchart TD
 ## 5. 엔지니어링 의사결정 프레임워크 (Figure 7-3, p. 318) ⭐
 
 ```mermaid
-quadrantChart
-    title 프롬프팅 vs RAG vs 파인튜닝 진화 4분면 (Figure 7-3)
-    x-axis 행동 최적화 (Behavior Optimization) --> 높음 (Fine-tuning)
-    y-axis 문맥 최적화 (Context Optimization) --> 높음 (RAG)
-    quadrant-1 RAG + 파인튜닝 (최상위 엔터프라이즈 하이브리드)
-    quadrant-2 RAG (검색 기반 최신 지식 및 사실 증강)
-    quadrant-3 기본 프롬프팅 (Zero-shot / Few-shot / CoT)
-    quadrant-4 파인튜닝 (형식, 문법, 톤앤매너 체화)
-    "1. 단순 프롬프트": [0.15, 0.20]
-    "2. 퓨샷 프롬프트": [0.35, 0.35]
-    "3. 키워드/밀집 RAG": [0.25, 0.70]
-    "4. 하이브리드 RAG": [0.30, 0.88]
-    "5. 포맷/스타일 LoRA": [0.80, 0.25]
-    "6. RAG + LoRA 결합": [0.78, 0.88]
+flowchart TD
+    subgraph S1["1단계: 기본 프롬프팅 (Baseline)"]
+        P1["단순 프롬프트 (Zero-shot)"] --> P2["퓨샷 프롬프트 (Few-shot / CoT)"]
+    end
+
+    subgraph S2["2단계: 기본 지식 검색 (Basic Retrieval)"]
+        R1["단순 키워드 검색 (BM25) 도입\n(정보 부족 및 사실적 환각 1차 방지)"]
+    end
+
+    subgraph S3["3단계: 실패 모드(Failure Mode)별 분기 최적화"]
+        subgraph BranchRAG["정보/지식 부족 지속 시"]
+            AdvRAG["고급 RAG 최적화\n(임베딩 벡터 검색 + 하이브리드 RRF + 리랭킹)"]
+        end
+        subgraph BranchFT["행동/포맷 오류 지속 시"]
+            FT["파인튜닝 (LoRA / SFT)\n(JSON 스키마 100% 고정 + 도메인 톤앤매너 체화)"]
+        end
+    end
+
+    subgraph S4["4단계: 엔터프라이즈 통합 (Top-Right 완성)"]
+        Hybrid["🏆 파인튜닝 모델 + 고급 RAG 결합 (하이브리드)\n(완벽한 포맷/태도 체화 + 최신 사내 지식 실시간 공급)"]
+    end
+
+    P2 --> R1
+    R1 -->|정보 실패 지속| AdvRAG
+    R1 -->|행동/포맷 오류 지속| FT
+    AdvRAG --> Hybrid
+    FT --> Hybrid
 ```
+
+#### 📊 프롬프팅 vs RAG vs 파인튜닝 4분면 매트릭스 (Figure 7-3)
+
+| 구분 | **행동 최적화 낮음 (프롬프팅 기반)** | **행동 최적화 높음 (파인튜닝 기반)** |
+| :--- | :--- | :--- |
+| **문맥 최적화 높음<br>(RAG 기반)** | **[2사분면] RAG 단독 시스템**<br>• 최신 사내 지식, 동적 데이터 검색 증강<br>• 일반적인 지식 집약적 질의응답 비서 | **[1사분면] RAG + 파인튜닝 통합 🏆**<br>• 기업 고유의 포맷/톤 완벽 준수<br>• 실시간 외부 최신 지식 완벽 증강 |
+| **문맥 최적화 낮음<br>(사전 지식 의존)** | **[3사분면] 기본 프롬프팅 (Baseline)**<br>• Zero-shot, Few-shot, CoT 프롬프트<br>• 가장 저렴하고 빠른 프로토타이핑 | **[4사분면] 파인튜닝 단독**<br>• JSON/SQL 출력 형식 100% 강제<br>• 고객지원 전용 페르소나 및 어휘 체화 |
 
 ### AI 엔지니어의 올바른 실무 개발 4단계 순서
 
