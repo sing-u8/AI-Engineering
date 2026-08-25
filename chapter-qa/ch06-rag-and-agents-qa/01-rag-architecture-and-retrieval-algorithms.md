@@ -155,10 +155,18 @@ flowchart TD
 
 ---
 
-#### 3) TF-IDF 수학 공식
+#### 3) TF-IDF 수학 공식 (p. 259)
 $$\text{IDF}(t) = \log \frac{N}{C(t)}$$
 $$\text{Score}_{\text{TF-IDF}}(D, Q) = \sum_{t \in Q} \text{IDF}(t) \times f(t, D)$$
-* $N$: 전체 문서 수, $C(t)$: 단어 $t$를 포함하는 문서 수, $f(t, D)$: 문서 $D$ 내 단어 $t$의 출현 빈도(TF)
+
+* **$Q$ (Query):** 사용자가 입력한 검색 질문 ($t_1, t_2, \dots, t_q$ 단어들의 집합)
+* **$D$ (Document):** 검색 대상 문서 (또는 청크)
+* **$t \in Q$ (Term):** 검색 질문 $Q$에 포함된 개별 단어
+* **$f(t, D)$ (Term Frequency):** 문서 $D$ 내에서 단어 $t$가 등장한 출현 횟수 (TF)
+* **$N$ (Total Documents):** 코퍼스 내 전체 문서의 총 개수
+* **$C(t)$ (Document Count):** 단어 $t$를 포함하고 있는 문서의 개수 (DF)
+* **$\text{IDF}(t)$ (Inverse Document Frequency):** 단어 $t$의 희귀도 및 정보 중요도 가중치
+* **$\text{Score}_{\text{TF-IDF}}(D, Q)$:** 질문 $Q$에 대해 문서 $D$가 획득한 최종 유사도 관련성 점수 (질문 속 모든 단어의 점수 총합)
 
 ---
 
