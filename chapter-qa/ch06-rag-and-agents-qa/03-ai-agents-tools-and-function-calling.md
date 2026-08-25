@@ -2,7 +2,7 @@
 category: rag-and-agents
 title: "03. AI 에이전트 기초와 도구 활용 및 함수 호출 (Function Calling) (pp. 275-285)"
 source: "AI Engineering · Chapter 6 (p.275-285)"
-tags: [agents, ai-agents, swe-agent, function-calling, tool-use, decoupled-planning, multi-agent, chameleon, yann-lecun, world-model, aci, hitl]
+tags: [agents, ai-agents, swe-agent, function-calling, tool-use, decoupled-planning, multi-agent, chameleon, yann-lecun, world-model, aci, hitl, json-schema]
 ---
 
 # 03. AI 에이전트 기초와 도구 활용 및 함수 호출 (Function Calling)
@@ -49,11 +49,11 @@ flowchart LR
 
 * 🚀 **SWE-agent (Software Engineering Agent) 사례 연구 (Yang et al., 2024, Figure 6-8):**  
   * **환경:** 실제 Linux 터미널 및 Git 코드베이스 저장소.
-  * **ACI (Agent-Computer Interface, 에이전트-컴퓨터 인터페이스):** 사람이 쓰는 복잡한 IDE 대신, LLM이 읽기 편하도록 화면을 100줄씩 페이지네이션하여 보여주는 파일 뷰어, 특정 줄 번호를 교체하는 파일 에디터, bash 명령어 실행기를 전용 인터페이스로 제공하여 GitHub 실제 이슈를 자율적으로 해결.
+  * **ACI (Agent-Computer Interface, 에이전트-컴퓨터 인터페이스):** 사람이 쓰는 복잡한 IDE 대신, LLM이 읽기 편하도록 화면을 100줄씩 페이지네이션하여 보여주는 파일 뷰어, 특정 줄 번호를 교체하는 파일 에디터, 디렉토리 탐색기를 전용 인터페이스로 제공하여 GitHub 실제 이슈를 자율적으로 해결.
 
 ---
 
-## 2. 도구(Tools)와 함수 호출 (Function Calling, pp. 278 ~ 281)
+## 2. 도구(Tools)와 함수 호출 (Function Calling, pp. 278 ~ 283)
 
 ### ① 도구(Tools)의 필요성과 분류
 1. **읽기 전용 도구 (Read-only Actions):**  
@@ -61,16 +61,23 @@ flowchart LR
    * **웹 검색 및 날씨 API:** 모델의 지식 컷오프 이후의 실시간 최신 정보 조회.
 2. **쓰기 및 실행 도구 (Write & Mutating Actions):**  
    * **이메일 발송 / 데이터베이스 수정 / 금융 송금:** 실제 외부 시스템의 상태를 영구적으로 변경하는 고위험 작업.
-   * ⚠️ **보안 및 안전 통제:** 신입 인턴에게 운영 DB 삭제 권한을 주지 않듯, 쓰기 도구 실행 전에는 반드시 **HITL (Human-in-the-Loop, 인간 개입 / 인간 최종 승인)** 가드레일이 필요합니다.
+   * ⚠️ **보안 및 안전 통제:** 쓰기 도구 실행 전에는 반드시 **HITL (Human-in-the-Loop, 인간 개입 / 인간 최종 승인)** 가드레일이 필요합니다.
 
 * 💡 **Chameleon 프레임워크 (Lu et al., 2023):**  
-  GPT-4 단독 모델보다 13개 도구(웹 검색, 이미지 캡셔너, 텍스트 감지기 등)를 장착한 에이전트가 **ScienceQA 과학 질의응답에서 +11.37%p, TabMWP 표 수학 문제에서 +17%p의 정답률 향상**을 달성했습니다.
+  GPT-4 단독 모델보다 13개 도구(웹 검색, 이미지 캡셔너, 텍스트 감지기 등)를 장착한 에이전트가 **ScienceQA 과학 질의응답에서 +11.37%p, TabMWP 표 수학 문제에서 +17.0%p의 정답률 향상**을 달성했습니다.
 
 ---
 
-### ② 함수 호출 (Function Calling) 메커니즘 (Figure 6-10)
+### ② 함수 호출 (Function Calling) 상세 실행 트레이스 (Figure 6-10, pp. 283 ~ 287) ⭐
 
 함수 호출은 **자판기 버튼을 직접 누를 수 없는 사장님(LLM)이 비서(앱 백엔드 런타임)에게 "커피 뽑아와"라고 구조화된 JSON 주문서를 써서 넘겨주는 과정**입니다:
+
+```
+[ 사용자 질의: "지난 7일 동안 가장 많이 팔린 상품의 가격은 얼마인가요?" ]
+사용 가능한 도구:
+1. get_today_date() -> 오늘 날짜 문자열 반환
+2. fetch_top_products(start_date, end_date) -> 해당 기간 최고 판매 상품 목록 반환
+```
 
 ```mermaid
 sequenceDiagram
@@ -79,23 +86,24 @@ sequenceDiagram
     participant LLM as LLM (중앙 인지 두뇌)
     participant Tool as 외부 도구 (API / DB)
 
-    User->>App: "지난주 가장 많이 팔린 상품 가격이 얼마야?"
-    App->>LLM: 사용자 질문 + 도구 JSON Schema 전달
-    LLM-->>App: 함수 호출 JSON 주문서 반환: {"name": "get_today_date", "arguments": {}}
+    User->>App: "지난 7일간 가장 인기 상품 가격이 얼마야?"
+    App->>LLM: 사용자 질문 + 도구 JSON Schema 명세 전달
+    LLM-->>App: 함수 호출 1: {"name": "get_today_date", "arguments": {}}
     App->>Tool: get_today_date() 실행
-    Tool-->>App: 결과 반환: "2030-09-13"
-    App->>LLM: 이전 대화 + 도구 실행 결과("2030-09-13") 전달
-    LLM-->>App: 다음 함수 호출: {"name": "fetch_top_products", "start_date": "2030-09-07"}
-    App->>Tool: fetch_top_products() 실행
-    Tool-->>App: 결과 반환: "Fruity Fedora ($18)"
-    App->>LLM: 최종 도구 결과 전달
-    LLM-->>App: 최종 자연어 응답 생성: "지난주 베스트셀러는 Fruity Fedora이며 가격은 $18입니다."
+    Tool-->>App: 실행 결과: "2030-09-13"
+    App->>LLM: 이전 컨텍스트 + 도구 결과("2030-09-13") 전달
+    Note over LLM: 오늘(2030-09-13) 기준 7일 전 계산 ➔ 2030-09-06 도출
+    LLM-->>App: 함수 호출 2: {"name": "fetch_top_products", "arguments": {"start_date": "2030-09-06", "end_date": "2030-09-13"}}
+    App->>Tool: fetch_top_products(...) 실행
+    Tool-->>App: 실행 결과: [{"name": "Fruity Fedora", "price": 18}]
+    App->>LLM: 최종 도구 실행 결과 전달
+    LLM-->>App: 최종 자연어 응답 생성: "지난 7일 동안 가장 인기 있었던 상품은 Fruity Fedora이며, 가격은 $18입니다."
     App->>User: 최종 응답 전달
 ```
 
 ---
 
-### ③ 에이전트의 도구로서의 RAG (Agentic RAG) ⭐
+### ③ 에이전트의 도구로서의 RAG (Agentic RAG)
 RAG는 독립된 고정 파이프라인으로 동작할 수도 있지만, 에이전트 아키텍처에서는 **에이전트가 쥐고 있는 수많은 도구 중 하나(A Tool in the Toolkit)**로 통합됩니다:
 * **동적 검색 판단 (Dynamic Retrieval):** 에이전트는 사용자의 질문을 보고 사내 위키 RAG가 필요한지, 실시간 웹 검색이 필요한지, 아니면 도구 없이 상식으로 답할지 스스로 판단합니다.
 * **다단계 RAG 연계:** 에이전트는 `정형 SQL RAG`로 고객 주문 번호를 조회한 뒤, 그 결과를 바탕으로 다시 `비정형 문서 RAG`를 호출해 해당 제품의 취소 규정 문서를 찾아내는 다단계 복합 추론을 수행합니다.
@@ -138,7 +146,7 @@ flowchart TD
 | 입장 | 주요 학자 및 주장 | 핵심 근거 |
 | :--- | :--- | :--- |
 | **"LLM은 계획할 수 없다" ❌** | **Yann LeCun** (Meta 수석 AI 과학자, 2023) <br>**Subbarao Kambhampati** (2023) | • 자기회귀(Autoregressive) 토큰 예측기는 본질적으로 뒤로 되돌아가는 **백트래킹(Backtracking)과 트리 탐색 불가** <br>• 겉보기엔 그럴듯한 계획을 뱉지만 실제 실행 시 파탄남 |
-| **"LLM은 계획할 수 있다" ✅** | **Hao et al.** (2023) <br>*(Planning with World Model)* | • 방대한 지식을 학습한 LLM은 각 행동에 따른 **결과 상태를 예측하는 '월드 모델(World Model)' 역할 수행 가능** <br>• 자가 반성 및 상태 추적 도구와 결합하면 강력한 탐색 플래너로 진화 |
+| **"LLM은 계획할 수 있다" ✅** | **Hao et al.** (2023) <br>*(RAP: Reasoning via Planning)* | • 방대한 지식을 학습한 LLM은 각 행동에 따른 **결과 상태를 예측하는 '월드 모델(World Model)' 역할 수행 가능** <br>• 자가 반성 및 상태 추적 도구와 결합하면 강력한 탐색 플래너로 진화 |
 
 * **엔지니어링 결론:**  
   언어 모델 단독으로는 완전한 계획에 한계가 있을 수 있지만, **MCTS (Monte Carlo Tree Search, 몬테카를로 트리 탐색)** 알고리즘 및 외부 상태 검증기와 결합하면 프로덕션에서 매우 안정적이고 강력하게 작동하는 자율 에이전트를 완성할 수 있습니다.

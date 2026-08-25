@@ -2,15 +2,16 @@
 category: rag-and-agents
 title: "04. 에이전트 계획 수립, 자가 반성(ReAct, Reflexion)과 메모리 계층 (pp. 285-306)"
 source: "AI Engineering · Chapter 6 (p.285-306)"
-tags: [agents, planning, control-flow, react, reflexion, self-reflection, tool-transition-tree, agent-memory, memory-hierarchy, episodic-memory, working-memory]
+tags: [agents, planning, planning-failures, control-flow, react, reflexion, self-reflection, tool-transition-tree, agent-memory, memory-hierarchy, episodic-memory, working-memory, agent-evaluation, swe-bench, webarena]
 ---
 
 # 04. 에이전트 계획 수립, 자가 반성(ReAct, Reflexion)과 메모리 계층
 
 ## 📌 핵심 요약 & 전체 맥락
 > **"단순한 명령 수행을 넘어, 스스로 생각하고(Reasoning), 행동하고(Acting), 실패로부터 반성(Reflexion)하며 기억(Memory)을 축적하는 것이 진정한 자율 에이전트의 완성입니다."**  
-> 본 섹션에서는 에이전트가 복잡한 다단계 과업을 해결하기 위한 **4가지 실행 제어 흐름(순차, 병렬 분기, 조건문, 루프)**과, 생각과 행동을 실시간으로 교차 반복하는 **ReAct (Reason + Act)** 프레임워크를 분석합니다.  
-> 나아가 실패한 시도의 궤적(Trajectory)을 언어로 비판 회고하여 다음 시도의 성공률을 수직 상승시키는 **Reflexion (자가 반성 루프)**, 다음 호출 도구를 마르코프 확률로 예측하는 **도구 전이 트리(Tool Transition Tree)**, 그리고 **3단계 메모리 계층 구조(내부 가중치 지식 ➔ 장기 외장 기억 ➔ 단기 작업 기억)**의 최적 관리 정책을 완벽하게 정리합니다.
+> 본 섹션에서는 에이전트가 복잡한 다단계 과업을 해결하기 위한 **4가지 실행 제어 흐름(순차, 병렬 분기, 조건문, 루프)**과 계획 실패(Planning Failures)의 4대 원인을 분석합니다.  
+> 또한 생각과 행동을 실시간으로 교차 반복하는 **ReAct (Reason + Act)** 프레임워크와, 실패한 시도의 궤적(Trajectory)을 언어로 비판 회고하여 다음 시도의 성공률을 수직 상승시키는 **Reflexion (자가 반성 루프)**의 원리를 다룹니다.  
+> 나아가 다음 호출 도구를 마르코프 확률로 예측하는 **도구 전이 트리(Tool Transition Tree)**, **3단계 메모리 계층 구조(내부 가중치 지식 ➔ 장기 외장 기억 ➔ 단기 작업 기억)**의 최적 관리 정책, 그리고 궤적 기반의 **에이전트 표준 평가 프레임워크(SWE-bench, WebArena 등)**까지 완벽하게 정리합니다.
 
 ---
 
@@ -29,7 +30,9 @@ tags: [agents, planning, control-flow, react, reflexion, self-reflection, tool-t
 
 ---
 
-## 1. 에이전트 실행 제어 흐름 4가지 (Control Flow, Figure 6-11, pp. 287 ~ 290)
+## 1. 계획 수립의 제어 흐름과 실패 요인 (pp. 287 ~ 291)
+
+### ① 에이전트 실행 제어 흐름 4가지 (Control Flow, Figure 6-11)
 
 복잡한 과업을 수행할 때 에이전트는 단순 일직선 실행을 넘어 다양한 프로그램 제어 구조를 생성합니다:
 
@@ -43,8 +46,31 @@ flowchart TD
     end
 ```
 
-* **엔지니어링 시사점:**  
-  여러 웹사이트를 크롤링하거나 복수 도구를 호출할 때 순차 실행 대신 **병렬 실행(Parallel)**을 지원하는 에이전트 프레임워크를 사용하면 **사용자 체감 지연시간(Latency)을 비약적으로 단축**할 수 있습니다.
+* **계획 세분성 (Planning Granularity)의 트레이드오프:**  
+  * **너무 고수준(High-level):** "버그를 고쳐라"처럼 너무 뭉텅이로 계획하면 실행 단계에서 모델이 구체적 액션을 취하지 못하고 헤맴.
+  * **너무 저수준(Low-level):** "27번째 줄을 열고 3번째 글자를 고쳐라"처럼 지나치게 세세하면 외부 환경의 작은 변화에도 전체 계획이 깨져버림.
+
+---
+
+### ② 에이전트 계획 수립 4대 실패 유형 (Planning Failures, pp. 290 ~ 291) ⭐
+
+프로덕션 에이전트에서 빈번하게 발생하는 **4대 치명적 고장 형태**:
+
+```
+[ 에이전트 계획 수립의 4대 실패 모드 ]
+
+1. 존재하지 않는 도구 및 환각 인자 호출 (Hallucinated Tools & Arguments) :
+   - 시스템에 등록되지 않은 가상의 API를 지어내거나 필수 파라미터 타입을 틀리게 전달.
+
+2. 무한 반복 루프 (Infinite Loops & Repetitive Actions) :
+   - 도구 실행에 실패했음에도 원인을 수정하지 않고 동일한 실패 인자로 동일 도구를 수십 번 반복 호출하여 자원 낭비.
+
+3. 연쇄적 오차 누적 (Compounding Errors) :
+   - 1단계 하위 작업에서 잘못된 데이터가 반환되었는데, 이를 검증 없이 2~5단계의 입력으로 사용하여 최종 결과가 완전히 왜곡됨.
+
+4. 과도하게 복잡한 계획 (Over-complicated Plans) :
+   - 단 1번의 검색으로 풀 수 있는 간단한 질문에 대해 불필요하게 10단계의 복잡한 계획을 세워 비용과 지연시간 폭증.
+```
 
 ---
 
@@ -98,12 +124,14 @@ sequenceDiagram
     Env-->>Eval: 모든 테스트 케이스 통과! (Reward = 1, 성공 🎉)
 ```
 
-* **성능 향상:** 코딩 벤치마크(HumanEval)에서 단순히 코드를 고치라고 지시할 때보다, **오답 노트를 바탕으로 3~5회 반성(Reflexion)하며 재도전했을 때 정답률이 20~30%p 수직 상승**했습니다.
+* **성능 향상:** 코딩 벤치마크(HumanEval) 및 복잡한 의사결정 태스크에서 단순히 코드를 고치라고 지시할 때보다, **오답 노트를 바탕으로 3~5회 반성(Reflexion)하며 재도전했을 때 정답률이 20~30%p 수직 상승**했습니다.
 
 ---
 
 ## 4. 도구 사용 패턴과 도구 전이 트리 (Lu et al., 2023, Figures 6-14, 6-15)
 
+* **모델별 도구 선호 특성 (Figure 6-14):**  
+  GPT-4와 Claude는 동일한 작업을 주더라도 도구를 호출하는 빈도와 순서가 다릅니다.
 * **도구 전이 트리 (Tool Transition Tree, Figure 6-15):**  
   에이전트가 도구 $A$를 실행한 후 도구 $B$를 호출할 조건부 마르코프 확률 $P(B \mid A)$를 모델링한 트리 구조.
 * **엔지니어링 활용:**  
@@ -137,24 +165,29 @@ flowchart TD
 
 1. **FIFO 슬라이딩 윈도우 (First-In, First-Out, 선입선출):**  
    새로운 대화가 들어오면 메모리 용량 확보를 위해 가장 오래된 앞쪽 대화부터 잘라버립니다.  
-   ⚠️ **치명적 함정:** 대화 맨 처음에 정의된 **"이건 절대 하지 마!"라는 사용자의 핵심 목표와 규칙(System Prompt)이 가장 먼저 날아가 버리는 심각한 건망증**이 발생합니다.
-2. **재귀적 대화 요약 (Recursive Summarization, Bae et al., 2022):**  
+   ⚠️ **치명적 함정:** 대화 맨 처음에 정의된 **"이건 절대 하지 마!"라는 사용자의 핵심 목표와 규칙(System Prompt)이 가장 먼저 날아가 버리는 심각한 건망증**이 발생합니다. ➔ **시스템 프롬프트 고정(Pinning) 필수**.
+2. **재귀적 대화 요약 (Recursive Summarization, Bae et al., 2022 / MemGPT):**  
    오래된 대화들을 핵심 개체명(Entity)과 진행 상황을 담은 압축 요약문으로 변환하여 컨텍스트 상단에 유지.
 3. **지능형 기억 병합 및 모순 해결 (Reflection-based Merge, Liu et al., 2023):**  
    새로운 정보가 들어왔을 때 모델 스스로 반성하여, **기존 메모리에 단순히 추가할지, 병합할지, 아니면 오래되고 모순된 구 정보를 덮어쓸지(Overwrite) 능동 판단**.
 
 ---
 
-## 6. 에이전트 평가 프레임워크 (Agent Evaluation) ⭐
+## 6. 에이전트 평가 프레임워크와 주요 벤치마크 (pp. 305 ~ 306) ⭐
 
-단일 턴(Single-turn) 질의응답 시스템인 기본 RAG와 달리, 에이전트는 도구를 여러 번 호출하고 상태를 변화시키며 장기적인 목표를 달성해야 합니다. 따라서 기존의 단순 정확도(Accuracy) 지표만으로는 에이전트를 제대로 평가할 수 없습니다.
+단일 턴 질의응답 시스템인 기본 RAG와 달리, 에이전트는 도구를 여러 번 호출하고 상태를 변화시키며 장기적인 목표를 달성해야 합니다. 따라서 단순 텍스트 일치 점수만으로는 에이전트를 평가할 수 없습니다.
 
-* **에이전트 궤적 평가 (Trajectory Evaluation):**  
-  최종 결과물만 채점하는 것이 아니라, 에이전트가 목표 달성을 위해 거쳐간 **중간 추론 단계(Thought)와 도구 호출 내역(Tool Calls)**이 합리적인지 평가합니다.
-* **주요 평가 지표:**
-  1. **도구 선택 정확도 (Tool Selection Accuracy):** 올바른 도구를 적절한 타이밍에 호출했는가?
-  2. **인자 추출 정확도 (Argument Extraction):** 도구 호출 시 필수 파라미터(예: 날짜, ID)를 정확히 넘겨주었는가?
-  3. **복구 능력 (Recovery Rate):** 도구 실행 중 에러가 발생했을 때 멈추지 않고 자가 수정(Self-Correction)을 통해 목표를 완수했는가?
+### ① 궤적 평가 (Trajectory Evaluation) 3대 메트릭
+1. **도구 선택 정확도 (Tool Selection Accuracy):** 올바른 도구를 적절한 타이밍에 호출했는가?
+2. **인자 추출 정확도 (Argument Extraction):** 필수 파라미터(날짜, 파일 경로 등)를 형식에 맞게 정확히 넘겼는가?
+3. **오류 복구율 (Recovery Rate):** 도구 실행 중 에러가 발생했을 때 멈추지 않고 스스로 원인을 파악해 우회/수정했는가?
+4. **단계 효율성 (Step Efficiency):** 불필요하게 긴 경로를 돌아가지 않고 최소한의 도구 호출로 목표를 달성했는가?
+
+### ② 에이전트 표준 벤치마크
+* **SWE-bench (Jimenez et al., 2024):** GitHub 실제 오픈소스 레포지토리의 버그 이슈를 해결하고 유닛 테스트를 통과하는지 평가하는 코딩 에이전트 표준.
+* **WebArena (Zhou et al., 2024):** 실제 웹 브라우저(쇼핑몰, 레딧, 위키) 환경에서 사람의 웹 서핑 및 예약 작업을 완수하는지 평가.
+* **GAIA (Mialon et al., 2023):** 웹 브라우징, 멀티모달 파일 판독 등 복합 도구를 활용하는 일반 인공지능 보조 역량 평가.
+* **ToolBench (Qin et al., 2023):** 16,000개 이상의 실제 REST API 도구를 에이전트가 올바르게 조합 호출하는지 평가.
 
 ---
 
