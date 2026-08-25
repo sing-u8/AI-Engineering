@@ -197,6 +197,72 @@ SYSTEM:
 * 🚀 **DSPy (Demonstrate-Search-Predict Framework, 스탠퍼드 대학교):**  
   문구를 수작업으로 수정하는 대신, 파이썬 코드로 모듈 구조와 평가 메트릭을 정의하면 **DSPy 컴파일러가 최적의 지시문과 Few-shot 예시 조합을 자동으로 탐색·합성하는 최첨단 프롬프트 프로그래밍 패러다임**.
 
+##### 💻 [실제 구현 예시] DSPy를 활용한 프롬프트 자동 컴파일 파이썬 코드
+DSPy는 문자열 조작 대신 **PyTorch와 유사한 클래스 구조(Signature ➔ Module ➔ Optimizer.compile)**를 사용하는 실제 동작하는 공식 라이브러리(`dspy-ai`)입니다:
+
+```python
+import os
+import dspy
+
+# 1. 언어 모델 설정 (OpenAI API 등)
+lm = dspy.LM('openai/gpt-4o-mini', api_key=os.environ.get("OPENAI_API_KEY"))
+dspy.settings.configure(lm=lm)
+
+# 2. Signature (선언적 입출력 명세 정의)
+class BasicQA(dspy.Signature):
+    """주어진 문맥(Context)을 바탕으로 질문(Question)에 대해 간결하고 정확하게 답하시오."""
+    context = dspy.InputField(desc="참고할 배경 지식/문서")
+    question = dspy.InputField(desc="사용자의 질문")
+    answer = dspy.OutputField(desc="1~2문장의 명확한 정답")
+
+# 3. Module 정의 (ChainOfThought를 통한 중간 추론 자동 결합)
+class RAGPipeline(dspy.Module):
+    def __init__(self):
+        super().__init__()
+        self.generate_answer = dspy.ChainOfThought(BasicQA)
+        
+    def forward(self, context, question):
+        return self.generate_answer(context=context, question=question)
+
+# 4. 소량의 검증 데이터셋 (단 몇 개의 예시만으로도 최적화 가능)
+trainset = [
+    dspy.Example(
+        context="파이썬은 1991년 귀도 반 로섬이 발표한 프로그래밍 언어이다.",
+        question="파이썬을 만든 사람은 누구인가요?",
+        answer="귀도 반 로섬"
+    ).with_inputs('context', 'question'),
+    dspy.Example(
+        context="빛의 속도는 진공에서 초당 약 30만 km이다.",
+        question="빛은 1초에 얼마나 이동하나요?",
+        answer="약 30만 km"
+    ).with_inputs('context', 'question')
+]
+
+# 5. 평가 메트릭 (정답 키워드가 포함되어 있는지 검증)
+def validate_answer(example, pred, trace=None):
+    return example.answer in pred.answer
+
+# 6. 컴파일러(Optimizer)로 프롬프트 자동 최적화!
+from dspy.teleprompt import BootstrapFewShot
+
+optimizer = BootstrapFewShot(metric=validate_answer, max_bootstrapped_demos=2)
+compiled_rag = optimizer.compile(student=RAGPipeline(), trainset=trainset)
+
+# 7. 최적화된 프롬프트로 추론 수행
+response = compiled_rag(
+    context="대한민국의 수도는 서울이며, 인구는 약 940만 명이다.",
+    question="대한민국의 수도는 어디인가요?"
+)
+
+print("=== 최종 답변 ===", response.answer)
+print("=== 자동 생성된 추론 과정 ===", response.rationale)
+
+# DSPy가 내부적으로 조립한 최종 프롬프트 전문 확인
+# lm.inspect_history(n=1)
+```
+
+> 💡 **DSPy의 핵심 가치:** 모델을 `GPT-4o`에서 오픈소스 `Llama-3-8B`로 변경하더라도 사람이 프롬프트를 일주일 동안 다시 쓸 필요 없이, `lm` 설정을 바꾼 뒤 `compile()`만 다시 실행하면 Llama-3에 최적화된 프롬프트가 전자동으로 완성됩니다.
+
 #### ③ 프롬프트 도구의 함정과 주의사항 (Figure 5-9, p. 232)
 * **숨겨진 API 비용 폭증:** 프롬프트 자동 튜닝 도구가 10개 변형을 30개 평가 샘플에 돌리면 **단 한 번에 300회 이상의 백그라운드 API 호출**이 발생하여 비용 폭탄을 맞을 수 있습니다.
 * **프레임워크 자체의 결함 (Figure 5-9):** LangChain 등의 오픈소스 기본 critique 프롬프트 템플릿에 실제 오타(Typo)나 잘못된 토큰 결합 로직이 방치되어 성능을 갉아먹은 사례가 존재합니다.
