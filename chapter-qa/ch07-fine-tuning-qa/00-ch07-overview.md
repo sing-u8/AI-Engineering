@@ -1,15 +1,15 @@
 ---
 category: fine-tuning
 title: "Chapter 07. 파인튜닝과 매개변수 효율적 학습, 모델 병합 (Fine-Tuning) 전체 개요"
-source: "AI Engineering · Chapter 7 (p.307-358)"
-tags: [fine-tuning, peft, lora, qlora, quantization, memory-math, model-merging, slerp, ties-merging, task-arithmetic, frankenmoe, depthwise-scaling]
+source: "AI Engineering · Chapter 7 (p.307-362)"
+tags: [fine-tuning, peft, lora, qlora, quantization, memory-math, model-merging, slerp, ties-merging, task-arithmetic, frankenmoe, depthwise-scaling, finetuning-tactics, gradient-accumulation, loss-masking]
 ---
 
 # Chapter 07. 파인튜닝과 매개변수 효율적 학습, 모델 병합 (Fine-Tuning)
 
 > **"프롬프트 엔지니어링과 RAG가 모델에게 '무엇을 말할지(What)' 알려준다면, 파인튜닝은 모델이 '어떻게 행동하고 생각할지(How)' 두뇌 자체를 영구적으로 재구성하는 작업이다."**  
 > 기본 파운데이션 모델을 특정 도메인(의료, 금융, 코딩)과 기업 고유의 스타일/포맷에 맞추기 위해 가중치를 업데이트하는 **파인튜닝(Fine-Tuning)**은 고성능 AI 시스템 구축의 핵심 단계입니다.  
-> 본 챕터에서는 **프롬프팅 vs RAG vs 파인튜닝의 엔지니어링 의사결정 프레임워크**부터, 학습 메모리를 지배하는 **활성화 메모리(Activations)와 수치 정밀도(FP16, BF16, BitNet 1.58-bit)**, 거대 모델을 단 한 장의 GPU로 튜닝하는 **LoRA 및 QLoRA (PEFT)**, 그리고 별도의 GPU 학습 없이 가중치 연산만으로 여러 전문가 모델을 합치는 최신 **모델 병합(Model Merging: SLERP, TIES, DARE, FrankenMoE, Solar-10.7B)** 기법까지 파인튜닝의 모든 것을 심층적으로 다룹니다.
+> 본 챕터에서는 **프롬프팅 vs RAG vs 파인튜닝의 엔지니어링 의사결정 프레임워크**부터, 학습 메모리를 지배하는 **활성화 메모리(Activations)와 수치 정밀도(FP16, BF16, BitNet 1.58-bit)**, 거대 모델을 단 한 장의 GPU로 튜닝하는 **LoRA 및 QLoRA (PEFT)**, 별도의 GPU 학습 없이 가중치 연산만으로 여러 전문가 모델을 합치는 **모델 병합(Model Merging: SLERP, TIES, DARE, FrankenMoE, Solar-10.7B)**, 그리고 **실무 전술(Learning Rate, Gradient Accumulation, Response Loss Masking, Unsloth)**까지 파인튜닝의 모든 것을 심층적으로 다룹니다.
 
 ---
 
@@ -17,11 +17,12 @@ tags: [fine-tuning, peft, lora, qlora, quantization, memory-math, model-merging,
 
 | 번호 | 문서 제목 | 핵심 내용 및 주요 키워드 | 원문 페이지 |
 | :---: | :--- | :--- | :---: |
-| **00** | [[00-ch07-overview\|00. Chapter 7 전체 개요 및 목차]] | 파인튜닝 & 모델 병합 전체 로드맵, 개념 지도 및 도표 총괄 색인 | pp. 307-358 |
-| **01** | [[01-finetuning-foundations-and-decision-framework\|01. 파인튜닝 기초와 엔지니어링 의사결정 프레임워크]] | 파인튜닝 목적, Code Llama 구축 파이프라인(Figure 7-1), 범용 vs 특화 모델 비교(Table 7-1), 프롬프팅 vs RAG vs 파인튜닝 3대 비교 및 하이브리드 의사결정 흐름도 (pp. 307-315) | `Code Llama`, `Task Specialization`, `Format Steering`, `RAG vs Fine-tuning`, `Decision Framework` |
-| **02** | [[02-memory-math-and-quantization\|02. 학습 메모리 수학과 수치 정밀도 및 양자화 (FP16, BF16, BitNet)]] | 역전파 계산 그래프(Figure 7-4), 4대 학습 메모리(가중치, 그래디언트, 옵티마이저, 활성화 메모리 Figure 7-5), 부동소수점 포맷(FP32, FP16, BF16 Figure 7-6 & Table 7-3), BitNet 1.58비트 삼진 모델 (pp. 315-324) | `Activation Memory`, `Backpropagation`, `Optimizer States`, `FP16`, `BF16`, `Quantization`, `BitNet 1.58b` |
-| **03** | [[03-peft-lora-and-qlora\|03. 매개변수 효율적 파인튜닝(PEFT)과 LoRA / QLoRA 서빙]] | 완전 파인튜닝의 한계, 어댑터(Houlsby Figure 7-8), 소프트 프롬프트(Figure 7-9), LoRA 저차원 분해 수학($W + \frac{\alpha}{r}BA$ Figure 7-11), 멀티 LoRA 서빙(Figure 7-12 & Table 7-6), QLoRA 4비트 NF4 양자화 (pp. 324-342) | `PEFT`, `LoRA`, `Low-Rank Decomposition`, `Multi-LoRA Serving`, `QLoRA`, `NF4`, `Double Quantization` |
-| **04** | [[04-model-merging-and-weight-arithmetic\|04. 모델 병합(Model Merging)과 가중치 산술 연산]] | 앙상블 vs 모델 병합(Figure 7-13), 선형 가중치 평균(Figure 7-15), 구면 선형 보간(SLERP Figure 7-16), 태스크 산술 & TIES-Merging / DARE 가지치기(Figure 7-17), FrankenMoE 업스케일링(Figure 7-18), 깊이 확장(Solar-10.7B Figure 7-19), LoRA 어댑터 병합 (pp. 342-358) | `Model Merging`, `SLERP`, `Task Arithmetic`, `TIES-Merging`, `DARE`, `FrankenMoE`, `Depthwise Scaling` |
+| **00** | [[00-ch07-overview\|00. Chapter 7 전체 개요 및 목차]] | 파인튜닝 & 모델 병합 전체 로드맵, 개념 지도 및 도표 총괄 색인 | pp. 307-362 |
+| **01** | [[01-finetuning-foundations-and-decision-framework\|01. 파인튜닝 기초와 엔지니어링 의사결정 프레임워크]] | 파인튜닝 목적, Code Llama 구축 파이프라인(Figure 7-1), 범용 vs 특화 모델 비교(Table 7-1 BloombergGPT 사례), 프롬프팅 vs RAG vs 파인튜닝 3대 비교(Table 7-2) 및 하이브리드 4분면 의사결정 흐름도(Figure 7-3) (pp. 307-319) | `Code Llama`, `Task Specialization`, `Format Steering`, `RAG vs Fine-tuning`, `Decision Framework` |
+| **02** | [[02-memory-math-and-quantization\|02. 학습 메모리 수학과 수치 정밀도 및 양자화 (FP16, BF16, BitNet)]] | 역전파 계산 그래프(Figure 7-4), 4대 학습 메모리(가중치, 그래디언트, 옵티마이저 16B/param, 활성화 메모리 Figure 7-5), 부동소수점 포맷(FP32, FP16, BF16 Figure 7-6 & Table 7-3), BitNet 1.58비트 삼진 모델(Table 7-4) (pp. 319-332) | `Activation Memory`, `Backpropagation`, `Optimizer States`, `FP16`, `BF16`, `Quantization`, `BitNet 1.58b` |
+| **03** | [[03-peft-lora-and-qlora\|03. 매개변수 효율적 파인튜닝(PEFT)과 LoRA / QLoRA 서빙]] | 완전 파인튜닝의 한계(Figure 7-7), 어댑터(Houlsby Figure 7-8), 소프트 프롬프트(Figure 7-9), LoRA 저차원 분해 수학($W + \frac{\alpha}{r}BA$ Figure 7-11), Multi-LoRA 서빙(Figure 7-12 & Table 7-6), QLoRA 4비트 NF4 양자화(Table 7-7) (pp. 332-347) | `PEFT`, `LoRA`, `Low-Rank Decomposition`, `Multi-LoRA Serving`, `QLoRA`, `NF4`, `Double Quantization` |
+| **04** | [[04-model-merging-and-weight-arithmetic\|04. 모델 병합(Model Merging)과 가중치 산술 연산]] | 앙상블 vs 모델 병합(Figure 7-13), 선형 가중치 평균(Figure 7-15), 구면 선형 보간(SLERP Figure 7-16), 태스크 산술 & TIES-Merging / DARE 가지치기(Figure 7-17), FrankenMoE 전문가 결합(Figure 7-18), 깊이 확장(Solar-10.7B Figure 7-19), LoRA 어댑터 병합 (pp. 347-357) | `Model Merging`, `SLERP`, `Task Arithmetic`, `TIES-Merging`, `DARE`, `FrankenMoE`, `Depthwise Scaling` |
+| **05** | [[05-finetuning-tactics-and-hyperparameters\|05. 파인튜닝 실무 전술과 하이퍼파라미터 최적화]] | 파인튜닝 프레임워크 생태계(Unsloth, LLaMA-Factory, Axolotl), 분산 학습(DeepSpeed, FSDP), 학습률 및 스케줄러 선정, 배치 크기 & 그래디언트 누적(Gradient Accumulation), 에포크 결정과 과적합 진단, 프롬프트 손실 마스킹(Response-Only Loss) (pp. 357-361) | `Finetuning Tactics`, `Learning Rate`, `Gradient Accumulation`, `Epochs`, `Loss Masking`, `Unsloth`, `DeepSpeed` |
 
 ---
 
@@ -30,9 +31,9 @@ tags: [fine-tuning, peft, lora, qlora, quantization, memory-math, model-merging,
 ```mermaid
 flowchart TD
     subgraph PartA["1. 파인튜닝 기초 & 인프라 수학"]
-        Decide["의사결정: Prompting vs RAG vs Fine-tuning"]
-        MemMath["학습 메모리 수학 (가중치 2B + 그래디언트 2B + Adam 12B + 활성화 메모리)"]
-        Quant["수치 포맷 (FP32 ➔ FP16/BF16 ➔ INT8/INT4 ➔ BitNet 1.58b)"]
+        Decide["의사결정: Prompting vs RAG vs Fine-tuning (4분면 진화)"]
+        MemMath["학습 메모리 수학 (가중치 2B + 그래디언트 2B + Adam 12B = 16B/param)"]
+        Quant["수치 포맷 & 양자화 (FP32 ➔ FP16/BF16 ➔ INT8/INT4 ➔ BitNet 1.58b)"]
         Decide --> MemMath --> Quant
     end
 
@@ -45,13 +46,21 @@ flowchart TD
     end
 
     subgraph PartC["3. 제로 GPU 학습: 모델 병합 (Model Merging)"]
-        Merge["가중치 산술 연산 (Linear Average / SLERP)"]
+        Merge["가중치 산술 연산 (Linear Average / SLERP 초구면 회전)"]
         TIES["간섭 제거 병합 (Task Arithmetic ➔ TIES-Merging ➔ DARE)"]
         Upscale["구조 확장 (FrankenMoE 전문가 결합 & Solar 10.7B 깊이 확장)"]
         Merge --> TIES --> Upscale
     end
 
-    PartA --> PartB --> PartC
+    subgraph PartD["4. 실무 전술 & 엔지니어링 최적화 (Tactics)"]
+        Frameworks["프레임워크 가속 (Unsloth 커널 융합 / LLaMA-Factory / Axolotl)"]
+        Hyper["하이퍼파라미터 튜닝 (LR 1e-4~5e-4 / 웜업 + 코사인 스케줄러)"]
+        MemoryOpt["메모리 극대화 (Gradient Accumulation 실효 배치 + 체크포인팅)"]
+        LossMask["손실 최적화 (Response-Only Loss Masking labels=-100)"]
+        Frameworks --> Hyper --> MemoryOpt --> LossMask
+    end
+
+    PartA --> PartB --> PartC --> PartD
 ```
 
 ---
@@ -64,7 +73,7 @@ flowchart TD
 | **Table 7-1** | 범용 모델 GPT-4 vs 금융 특화 모델(FinGPT, BloombergGPT) FPB/FiQA 벤치마크 비교표 | **p. 310** | 01 |
 | **Figure 7-2** | 파인튜닝을 통해 장황한 퓨샷 프롬프트를 콤팩트한 프롬프트로 단축하는 토큰 절감 효과 | **p. 312** | 01 |
 | **Table 7-2** | 최신 시사 질문 질의응답에서 RAG(검색)가 파인튜닝을 압도하는 정확도 비교표 | **p. 313** | 01 |
-| **Figure 7-3** | 프롬프팅 ➔ RAG ➔ 파인튜닝으로 이어지는 최적 애플리케이션 개발 흐름도 | **p. 314** | 01 |
+| **Figure 7-3** | 프롬프팅 ➔ RAG ➔ 파인튜닝으로 이어지는 최적 애플리케이션 개발 흐름도 (4분면 매트릭스) | **p. 314** | 01 |
 | **Figure 7-4** | 순전파(Forward) 및 가중치 업데이트 역전파(Backward) 계산 그래프 | **p. 316** | 02 |
 | **Figure 7-5** | 배치 크기와 시퀀스 길이에 따라 가중치 메모리를 압도하는 활성화 메모리(Activations) 비중 | **p. 318** | 02 |
 | **Figure 7-6** | 부호(Sign), 지수부(Exponent), 가수부(Fraction)로 구성된 FP32, FP16, BF16, INT8 비트 포맷 | **p. 320** | 02 |
@@ -105,3 +114,7 @@ flowchart TD
 * **DARE (Drop And REscale, 무작위 드롭 및 재스케일링):** 태스크 벡터 가중치의 90% 이상을 무작위로 0으로 드롭한 뒤 남은 가중치를 스케일업하여 성능 저하 없이 다중 모델을 합성하는 기법.
 * **MoE (Mixture of Experts, 전문가 혼합 아키텍처):** 여러 개의 특화된 서브 네트워크(전문가)와 어떤 전문가에게 토큰을 보낼지 결정하는 게이팅 라우터(Router)로 구성된 고효율 모델 구조.
 * **AdamW (Adam with Decoupled Weight Decay, 가중치 감쇠 분리 아담 옵티마이저):** 모멘텀(1차 모멘트 4바이트)과 분산(2차 모멘트 4바이트)을 추적하여 가중치당 12~16바이트의 막대한 GPU 메모리를 소모하는 표준 최적화 알고리즘.
+* **Unsloth (언슬로스):** OpenAI Triton 언어로 역전파 및 어텐션 연산 커널을 수동 재작성(Kernel Fusion)하여 학습 속도를 2~5배 가속하고 VRAM 소모를 70% 이상 절감하는 최신 LLM 파인튜닝 가속 엔진.
+* **Gradient Accumulation (그래디언트 누적):** GPU VRAM 한계로 작은 마이크로 배치를 쓸 때, 가중치를 즉시 업데이트하지 않고 여러 배치의 그래디언트를 메모리에 누적 합산한 뒤 한 번에 업데이트하여 대규모 실효 배치 크기(Effective Batch Size) 효과를 내는 기법.
+* **FSDP (Fully Sharded Data Parallel, 완전 샤딩 데이터 병렬화):** 모델 가중치, 그래디언트, 옵티마이저 상태를 여러 GPU에 분할 저장하여 단일 GPU 메모리 한계를 극복하는 PyTorch의 표준 분산 학습 백엔드.
+* **ZeRO (Zero Redundancy Optimizer, 제로 중복 최적화기):** Microsoft DeepSpeed의 메모리 최적화 기술로, 분산 데이터 병렬 학습 시 중복되는 옵티마이저/그래디언트/파라미터 메모리를 단계별(Stage 1, 2, 3)로 분할 제거하는 아키텍처.
