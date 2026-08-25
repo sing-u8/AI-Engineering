@@ -217,7 +217,13 @@ $$\text{Score}_{\text{TF-IDF}}(D, Q) = \sum_{t \in Q} \text{IDF}(t) \times f(t, 
 
 ### ② 임베딩 기반 밀집 벡터 검색 (Embedding-based Semantic Retrieval, pp. 260 ~ 264, Figure 6-3)
 
-텍스트를 의미론적 연속 공간의 벡터로 변환하여 **코사인 유사도(Cosine Similarity)**나 내적(Dot Product)을 통해 문맥상 가장 가까운 문서를 탐색합니다:
+#### 1) 시맨틱 검색의 본질과 워크플로우
+단어 기반 검색이 글자의 '외형(Appearance)'만 본다면, 임베딩 기반 검색은 글자의 **'의미(Meaning)'**를 벡터 공간의 거리로 계산합니다:
+* 📖 **"Transformer architecture" 쿼리 예시 (p. 260):**  
+  * **단어 기반 검색:** 전력 '변압기(Electric Transformer)'나 영화 '트랜스포머' 문서를 걸러내지 못하고 반환할 위험.
+  * **임베딩 기반 검색:** 문맥상 AI 딥러닝 신경망 아키텍처 문서를 정확히 식별하여 반환.
+* 💡 **프로덕션 시스템 구성 요소:**  
+  실제 시맨틱 검색 파이프라인은 단순 임베딩 조회를 넘어, **지연시간 단축을 위한 캐시(Caches)**와 **정밀도 향상을 위한 리랭커(Reranker)**를 결합하여 전통적 추천 시스템(Recommender System)과 유사하게 동작합니다.
 
 ```mermaid
 flowchart LR
@@ -228,40 +234,67 @@ flowchart LR
 
 ---
 
-### 🚀 4대 근사 최근접 이웃 (ANN, Approximate Nearest Neighbor) 인덱싱 기법 (pp. 262 ~ 264)
-
-수억 개의 벡터 전체를 전수 조사(Exact k-NN)하는 것은 너무 느리기 때문에, 약간의 정확도를 타협하고 검색 속도를 수백 배 끌어올리는 **ANN 알고리즘**을 사용합니다:
-
-```
-[ 4대 주요 ANN 벡터 인덱싱 알고리즘 비교 ]
-
-1. HNSW (Hierarchical Navigable Small World, Malkov & Yashunin, 2016) 🏆 :
-   - 고속도로(상위 성긴 그래프) ➔ 국도(중간 계층) ➔ 골목길(최하위 밀집 그래프)로 이어지는 다층 스킵 리스트 그래프 구조.
-   - 현존 최고 수준의 재현율(Recall)과 초고속 쿼리 속도 제공. 단, 인덱스 생성 시간과 RAM 소모량이 매우 큼.
-
-2. IVF (Inverted File Index, Sivic & Zisserman, 2003) :
-   - K-means 클러스터링으로 벡터 공간을 수천 개의 군집(Centroid)으로 분할 (군집당 100~10,000개 벡터).
-   - 쿼리 벡터와 가장 가까운 몇 개의 군집 내부의 벡터들만 선별적으로 탐색하여 탐색 공간 대폭 축소.
-
-3. PQ (Product Quantization, Jégou et al., 2011) ⭐ :
-   - 고차원 벡터(예: 1024차원)를 여러 개의 저차원 서브벡터(예: 128차원 8개)로 쪼갠 뒤 코드북(Codebook)의 대표 인덱스로 압축 양자화.
-   - 메모리 사용량을 1/8~1/16 수준으로 극적으로 줄이고 벡터 간 거리 연산 속도를 대폭 가속. (IVF와 결합된 IVF-PQ가 산업계 표준).
-
-4. LSH (Locality-Sensitive Hashing, Indyk & Motwani, 1999) :
-   - 유사한 벡터일수록 동일한 해시 버킷(Bucket)에 충돌하도록 설계된 특수 해시 함수 사용. 인덱스 생성이 빠르지만 정확도가 다소 떨어짐.
-```
-
-* **주요 벡터 검색 라이브러리:** Meta의 **FAISS**, Google의 **ScaNN**, Spotify의 **Annoy**, 오픈소스 **Hnswlib**.
+#### 2) 벡터 데이터베이스와 최근접 이웃 탐색 (Vector Search)
+* **저장은 쉽지만 검색은 어렵다:** 벡터 DB에서 고차원 부동소수점 배열을 디스크에 '저장'하는 것은 단순하지만, **수억 개의 벡터 중에서 쿼리와 가장 가까운 벡터를 밀리초 내에 찾아내는 '벡터 검색'이 핵심 난제**입니다.
+* **Naive k-NN (전수 조사):** 질문 벡터와 DB의 모든 벡터 간 유사도를 일일이 계산하여 정렬. 100% 완벽한 정밀도를 보장하지만 연산량이 너무 커서 소규모 데이터셋에만 적용 가능.
+* **ANN (Approximate Nearest Neighbor, 근사 최근접 이웃):** 수억 개 대규모 데이터에서 100배 빠른 탐색을 위해 약간의 정확도 손실을 감수하고 공간을 **버킷(Buckets), 트리(Trees), 그래프(Graphs)** 구조로 색인화.
 
 ---
 
-### ③ 키워드 검색 vs 시맨틱 검색 종합 비교 (Table 6-2)
+### 🚀 5대 주요 ANN 벡터 인덱싱 알고리즘과 라이브러리 (pp. 262 ~ 263)
+
+```
+[ 5대 주요 ANN 벡터 인덱싱 알고리즘 비교 ]
+
+1. HNSW (Hierarchical Navigable Small World, Malkov & Yashunin, 2016) 🏆 :
+   - 그래프 기반: 고속도로(상위 성긴 계층) ➔ 국도 ➔ 골목길(최하위 밀집 계층)로 이어지는 다층 스킵 그래프.
+   - 최고 수준의 재현율(Recall)과 검색 속도. (FAISS, Milvus, Hnswlib 기본 탑재).
+
+2. IVF (Inverted File Index, Sivic & Zisserman, 2003) :
+   - 군집 기반: K-means 클러스터링으로 벡터 공간을 수천 개의 군집(Centroid)으로 분할 (군집당 100~10,000개 벡터).
+   - 질문과 가장 인접한 몇 개의 중심점(Centroid) 내부 벡터만 선별 조사하여 탐색 공간 대폭 축소.
+
+3. PQ (Product Quantization, Jégou et al., 2011) ⭐ :
+   - 압축 양자화: 고차원 벡터를 여러 개의 저차원 서브벡터로 쪼갠 뒤 코드북(Codebook) 인덱스로 압축.
+   - 메모리 소모량을 1/8~1/16로 줄이고 거리 연산 초고속화 ➔ [IVF + PQ] 결합이 Meta FAISS의 핵심 뼈대!
+
+4. Annoy (Approximate Nearest Neighbors Oh Yeah, Bernhardsson, Spotify 2013) :
+   - 트리 기반: 공간을 랜덤 초평면(Hyperplane)으로 이진 분할하는 수십 개의 '이진 탐색 트리(Binary Trees)'를 구축하여 탐색.
+
+5. LSH (Locality-Sensitive Hashing, Indyk & Motwani, 1999) :
+   - 버킷 해싱: 유사한 벡터일수록 동일한 해시 버킷에 충돌하도록 특수 해시 함수 적용.
+```
+
+* **주요 벡터 검색 라이브러리:** Meta **FAISS**, Google **ScaNN**, Spotify **Annoy**, Microsoft **SPTAG**, **Hnswlib**, **FLANN**.
+* **기존 RDB의 확장:** PostgreSQL의 `pgvector`, Elasticsearch의 `dense_vector` 등 기존 데이터베이스들도 자체 벡터 검색 엔진을 적극 내장 중.
+
+---
+
+### ③ 단어 기반 vs 임베딩 기반 검색의 트레이드오프와 한계 (pp. 263 ~ 264)
 
 | 비교 항목 | 단어 기반 검색 (BM25) | 임베딩 기반 시맨틱 검색 (Dense) |
 | :--- | :--- | :--- |
 | **질의 속도 (Query Speed)** | ⚡ **압도적으로 빠름** (수 밀리초 이내) | 🐢 쿼리 임베딩 생성 및 벡터 탐색으로 상대적으로 느림 |
-| **초기 성능 (Performance)** | • 별도 튜닝 없이도 초기 성능 우수 <br>• 단어 모호성(동음이의어)에 취약 | • 자연어 의도와 문맥을 정확히 포착 <br>• 파인튜닝 시 BM25를 압도 가능 |
-| **인프라 비용 (TCO)** | 💰 **매우 저렴함** (CPU 및 디스크 기반) | 💸 **매우 비쌈** (임베딩 API 비용, 고용량 RAM 필요 - **서빙 비용의 20~50% 점유**) |
+| **성능 및 튜닝성** | • 초기 성능이 강력하나 튜닝 여지 적음 <br>• 동음이의어/문맥 파악 불가 | • 임베딩 파인튜닝 시 BM25를 압도 <br>• 자연어 의도와 문맥을 완벽 포착 |
+| **인프라 비용 (TCO)** | 💰 **매우 저렴함** (CPU 및 디스크 기반) | 💸 **매우 비쌈** (임베딩 API 비용, 고용량 RAM 필요) |
+| ⚠️ **치명적 약점** | 단어가 다르면 의미가 같아도 검색 실패 | **고유 에러 코드(`EADDRNOTAVAIL (99)`)나 특정 제품 모델명이 임베딩 압축 과정에서 뭉개져(Obscured) 검색 실패** |
+
+---
+
+### 📊 RAG 검색기 평가 메트릭: Context Precision vs Context Recall (p. 264) ⭐
+
+검색기(Retriever)의 품질을 평가하기 위해 RAG 프레임워크에서 사용하는 2대 핵심 지표:
+
+1. **Context Precision (문맥 정밀도 / Context Relevance):**  
+   * **정의:** 검색기가 가져온 Top-K 문서들 중 **실제 질문과 관련 있는 문서의 비율(%)**.
+   * 수식: $\frac{\text{가져온 관련 문서 수}}{\text{가져온 전체 문서 수 (K)}}$
+2. **Context Recall (문맥 재현율):**  
+   * **정의:** 데이터베이스 전체에 존재하는 정답 문서들 중 **검색기가 실제로 찾아낸 문서의 비율(%)**.
+   * 수식: $\frac{\text{가져온 관련 문서 수}}{\text{DB 내 전체 정답 문서 수}}$
+
+> 💡 **프로덕션 현장의 실무 인사이트:**  
+> 실무에서는 Context Recall을 측정하기 어렵습니다 (수백만 개 사내 문서 중 이 질문의 정답이 총 몇 개인지 전수 라벨링할 수 없기 때문).  
+> 따라서 실제 운영 환경에서는 **AI 판사(LLM-as-a-judge)가 가져온 상위 5개 문서만 보고 질문과의 관련성을 즉시 채점할 수 있는 `Context Precision`이 주로 사용**됩니다.
 
 ---
 
