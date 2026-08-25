@@ -316,6 +316,26 @@ print("=== 자동 생성된 추론 과정 ===", response.rationale)
 # lm.inspect_history(n=1)
 ```
 
+##### ❓ [심화 Q&A] 동일한 `InputField`인데 `context`와 `question` 변수를 어떻게 구분해서 매핑할까?
+클래스 선언 시 `desc`만 다르고 호출하는 메서드가 `dspy.InputField()`로 완전히 동일한데도 런타임에 배경 지식과 사용자 질문이 정확히 구분되는 원리는 **3단계 메커니즘**에 있습니다:
+
+1. **클래스 정의 시 (파이썬 메타클래스 변수명 감지):**  
+   `BasicQA` 클래스가 파이썬 인터프리터에 의해 생성될 때, `dspy.Signature` 내부의 메타클래스(Metaclass)가 클래스 속성을 검사하여 **변수 이름 자체(`context`, `question`)를 슬롯의 고유 키(Key)로 자동 등록**하고 설명(`desc`)을 바인딩합니다 (Pydantic 및 Django ORM과 동일한 원리).
+2. **함수 실행 시 (키워드 인자 `**kwargs` 매핑):**  
+   `compiled_rag(context="...", question="...")` 형태로 호출할 때, 넘겨받은 키워드 인자의 키 이름(`context`, `question`)을 바탕으로 각각 일치하는 슬롯에 값을 1:1로 주입합니다.
+3. **LLM 전송 시 (태그 기반 프롬프트 자동 조립):**  
+   DSPy가 모델에게 보낼 때 다음과 같이 **각 필드의 이름과 설명을 명확한 라벨로 분리하여 최종 프롬프트 문자열로 자동 조립**하기 때문에 LLM도 두 입력을 완벽히 구분합니다:
+   ```text
+   Context: 참고할 배경 지식/문서
+   Question: 사용자의 질문
+   Reasoning: Let's think step by step in order to produce the answer.
+   Answer: 1~2문장의 명확한 정답
+   ---
+   Context: 대한민국의 수도는 서울이며, 인구는 약 940만 명이다.
+   Question: 대한민국의 수도는 어디인가요?
+   Reasoning:
+   ```
+
 > 💡 **DSPy의 3대 실무적 장점:**
 > 1. **결합 최적화 (Joint Optimization):** 검색 ➔ 요약 ➔ 답변 생성으로 이어지는 다단계 파이프라인의 프롬프트를 한 번에 End-to-End로 조화롭게 최적화.
 > 2. **무마찰 모델 이식성 (Portability):** `GPT-4o`에서 `Llama-3-8B`로 모델을 바꿔도 사람이 프롬프트를 다시 쓰지 않고 `compile()`만 재실행하면 모델 맞춤형 프롬프트 완성.
