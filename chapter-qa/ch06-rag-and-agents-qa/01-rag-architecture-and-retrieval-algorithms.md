@@ -338,6 +338,43 @@ $$\text{RRF Score}(D) = \sum_{i=1}^n \frac{1}{k + r_i(D)}$$
 
 ---
 
+## 5. 실무 검색 솔루션 및 벡터 DB 선정 평가 기준 (Evaluating Retrieval Solutions, pp. 266 ~ 267) ⭐
+
+기업 프로덕션 환경에서 RAG 검색 엔진(Pinecone, Milvus, Qdrant, Weaviate, Elasticsearch 등)을 도입할 때 반드시 검토해야 하는 **6대 핵심 평가 체크리스트**입니다:
+
+```
+[ 검색 솔루션 및 벡터 DB 도입 시 6대 필수 평가 체크리스트 ]
+
+1. 지원하는 검색 메커니즘 (Supported Retrieval Mechanisms) :
+   - 단어 기반(BM25)과 밀집 벡터(Dense)를 동시에 수행하고 결합할 수 있는 '하이브리드 검색'을 네이티브로 지원하는가?
+
+2. 벡터 DB 호환성 및 지원 알고리즘 (Model & Algorithm Compatibility) :
+   - 다양한 임베딩 모델과의 연동이 매끄러운가?
+   - HNSW, IVF, PQ, ScaNN 등 비즈니스 요구에 맞는 ANN 인덱싱 알고리즘을 선택/설정할 수 있는가?
+
+3. 확장성 (Scalability for Storage & Traffic) :
+   - 데이터 저장 용량(Storage)과 쿼리 트래픽(QPS)이 증가할 때 스케일아웃(Scale-out)이 용이한가?
+   - 피크 타임의 갑작스러운 트래픽 스파이크(Burst Traffic) 패턴을 안정적으로 감당할 수 있는가?
+
+4. 인덱싱 소요 시간 및 일괄 처리량 (Indexing Time & Bulk Operations) :
+   - 대규모 신규 데이터를 색인화(Indexing)하는 데 얼마나 많은 시간이 소요되는가?
+   - 수십만~수백만 건의 데이터를 한 번에 대량 추가/수정/삭제(Bulk Add/Delete)할 수 있는 배치 처리 파이프라인을 지원하는가?
+
+5. 알고리즘별 쿼리 지연시간 (Query Latency) :
+   - 다양한 검색 알고리즘 및 필터링 조건에서 실제 엔드투엔드 쿼리 지연시간(Latency)이 SLA(예: 100ms 이내)를 충족하는가?
+
+6. 관리형 솔루션(Managed SaaS) 가격 정책 (Pricing Structure) :
+   - 저장된 문서/벡터 데이터의 용량(Storage-based) 기준 과금인가, 아니면 API 쿼리 호출 횟수(Query-based) 기준 과금인가?
+   - 우리 서비스의 사용 패턴에서 어떤 요금 모델이 TCO(총소유비용) 측면에서 유리한가?
+```
+
+* 🏢 **엔터프라이즈 필수 거버넌스 기능 (Enterprise Readiness):**
+  * **접근 제어 (Access Control / RBAC):** 사용자 및 부서별 권한에 따라 특정 문서 청크의 검색 결과를 격리·제한하는 기능.
+  * **보안 및 규정 준수 (Compliance):** 데이터 암호화(보관/전송 중), SOC2, GDPR, HIPAA 등 글로벌 보안 인증 준수.
+  * **데이터 플레인과 컨트롤 플레인 분리 (Data Plane & Control Plane Separation):** 실제 벡터 데이터의 저장/검색 경로와 인프라 관리/모니터링 경로를 물리적·논리적으로 분리하여 보안성과 안정성 극대화.
+
+---
+
 ## 🔗 연관 문서
 * [[00-ch06-overview|00. Chapter 6 전체 개요 및 목차]]
 * [[02-rag-optimization-and-multimodal-tabular|02. RAG 검색 최적화와 멀티모달·정형 데이터]]
