@@ -122,6 +122,40 @@ flowchart TD
 * 모델에게 원하는 출력을 얻기 위해 매번 50개의 예시(50-shot)가 담긴 **3,000토큰 프롬프트**를 전송하면, API 비용이 폭증하고 첫 토큰 지연시간(TTFT)이 심각하게 늘어납니다.
 * 파인튜닝을 통해 예시들을 모델의 가중치로 흡수시키면, **단 50토큰의 Zero-shot 프롬프트**만으로도 50-shot과 동일하거나 더 나은 결과를 얻을 수 있어 운영 비용과 대기 시간을 극적으로 낮출 수 있습니다.
 
+#### 💡 심층 실무 분석: 코딩 어시스턴트(Codex, Claude Code, Qwen-Coder)에서의 파인튜닝 vs 프롬프트 캐싱
+
+실제 개발 현장에서 코딩 어시스턴트에 사내 코딩 컨벤션이나 내부 라이브러리를 반영하는 방식은 생태계별로 크게 3가지로 나뉩니다:
+
+```mermaid
+flowchart TD
+    subgraph S1["1. OpenAI 생태계 (Codex / GPT-4o)"]
+        O1["FIM (Fill-in-the-Middle) 코드 학습\n(IDE 커서 중간 완성 파인튜닝)"]
+        O2["공식 Fine-Tuning API\n(JSONL 대화 데이터로 ft:gpt-4o-mini 생성)"]
+        O1 --> O2
+    end
+
+    subgraph S2["2. 오픈소스 생태계 (Qwen-Coder / DeepSeek)"]
+        OS1["사내 Git 커밋/PR 데이터 수집"]
+        OS2["Unsloth / LLaMA-Factory 기반 QLoRA\n(1장의 GPU로 온프레미스 자체 파인튜닝)"]
+        OS1 --> OS2
+    end
+
+    subgraph S3["3. Anthropic 생태계 (Claude / Claude Code)"]
+        C1["프롬프트 캐싱 (Prompt Caching)\n- CLAUDE.md 및 50-shot 예시 캐싱 (비용 90% 할인)"]
+        C2["에이전틱 컨텍스트 탐색 (Agentic Search)\n- Grep / AST / 파일 탐색으로 즉석 RAG 주입"]
+        C1 --> C2
+    end
+```
+
+1. **OpenAI (Codex / GPT-4o Fine-Tuning API):**
+   * **원천 학습 (Codex):** 일반 GPT를 커서 위치 중간 완성 기법인 **FIM(Fill-in-the-Middle)**과 단위 테스트 통과 보상(RL)으로 파인튜닝하여 개발.
+   * **사용자 커스텀 파인튜닝:** OpenAI 공식 Fine-Tuning API에 사내 SDK 예시가 담긴 `train.jsonl`을 업로드하여 `ft:gpt-4o-mini` 전용 모델을 생성하고 Cursor/VS Code에 연동 (Zero-shot 단문 질문만으로 사내 API 100% 준수 코드 생성).
+2. **오픈소스 코딩 모델 (Qwen2.5-Coder, DeepSeek-Coder, Code Llama):**
+   * 소스코드 외부 유출이 불가능한 기업 환경에서, 사내 레포지토리 코드를 수집하여 **Unsloth / QLoRA 4-bit로 단 1장의 GPU(RTX 3090/4090 또는 A100)에서 몇 시간 만에 자체 파인튜닝** 후 `vLLM`으로 사내 서빙.
+3. **Anthropic Claude & Claude Code (Zero-Fine-Tuning 전략):**
+   * Anthropic은 일반 개발자에게 모델 가중치 파인튜닝 API를 개방하지 않고 엔터프라이즈 전용(AWS Bedrock Custom Models)으로만 제한합니다.
+   * 대신 **Claude Code**는 **프롬프트 캐싱(Prompt Caching)**을 활용하여 50-shot 예시와 사내 룰(`CLAUDE.md`)을 캐시에 묶어두는 방식으로 해결합니다 (캐시 히트 시 **비용 90% 할인** 및 TTFT 0.1초 미만 달성). 여기에 파일 탐색 도구(`grep`, `glob`, `view`)를 결합한 **에이전틱 RAG**를 적용하여 파인튜닝 없이도 동일한 효과를 냅니다.
+
 ---
 
 ### ④ ⚠️ 얼라인먼트 택스(Alignment Tax)와 파국적 망각(Catastrophic Forgetting)
@@ -205,6 +239,15 @@ quadrantChart
 1. **일반 데이터 혼합 (Data Replay / Mixing):** 특화 데이터셋 학습 시, 일반 상식 데이터나 다국어/코딩 데이터를 일정 비율(10~20%) 섞어서 함께 학습시킵니다.
 2. **PEFT (LoRA) 활용:** 사전 학습된 원본 가중치 $W_0$를 완전히 고정(Freeze)하고 작은 어댑터만 학습시키면 원본 모델의 지식 파괴를 최소화할 수 있습니다.
 3. **정규화 손실 (Regularization):** 원본 모델 출력 분포와 파인튜닝 모델 출력 분포 사이의 KL 발산(KL Divergence)을 페널티로 부여하여 기존 지식에서 너무 멀어지지 않도록 제어합니다.
+
+### Q3. 사내 코드베이스를 AI 코딩 어시스턴트에 반영할 때, '파인튜닝'과 '프롬프트 캐싱 / RAG' 중 어떤 방식을 선택해야 하나요?
+* **파인튜닝이 유리한 경우:**  
+  * 사내 고유의 특수 DSL(Domain-Specific Language) 문법이나 비공개 프레임워크 문법을 **100% 엄격하게 강제**해야 할 때.
+  * 매번 동일한 퓨샷 예시를 보내는 API 비용과 대기 시간을 극단적으로 줄여야 할 때.
+  * *단점:* 사내 코드가 업데이트될 때마다 지속적으로 데이터셋을 재가공하고 재학습해야 하는 운영 부담(Maintenance Burden)이 큽니다.
+* **프롬프트 캐싱(Prompt Caching) & 에이전틱 RAG(Claude Code 등)가 유리한 경우:**  
+  * 수시로 코드가 커밋되고 브랜치가 바뀌는 **살아있는(Living) 대규모 프로젝트**.
+  * `CLAUDE.md`나 시스템 프롬프트에 사내 규칙을 정의하고 **프롬프트 캐싱으로 90% 비용 할인**을 받으면서, 실시간 파일 탐색 도구(`grep`, `view`)로 최신 코드 상태를 즉석에서 주입받는 것이 유지보수와 유연성 측면에서 훨씬 실용적입니다.
 
 ---
 
