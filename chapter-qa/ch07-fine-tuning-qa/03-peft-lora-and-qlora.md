@@ -164,7 +164,7 @@ Facebook AI Research(Meta) 연구진이 RoBERTa, GPT 등을 무작위 부분 공
 
 ## 2. LoRA의 수학적 원리와 하이퍼파라미터 구성 (Figure 7-11, Table 7-5, pp. 338 ~ 343)
 
-트랜스포머의 사전 훈련된 가중치 행렬 $W_0 \in \mathbb{R}^{d \times k}$가 있을 때, 특정 도메인 파인튜닝에 의한 가중치 변화량 $\Delta W$는 **본질적으로 낮은 고유 랭크(Intrinsic Rank $r \ll \min(d, k)$)를 갖는다**는 가설에 기반합니다:
+트랜스포머의 사전 훈련된 가중치 행렬 $W_0 \in \mathbb{R}^{d \times k}$ ($d$: 출력 차원 $d_{\text{out}}$, $k$: 입력 차원 $d_{\text{in}}$)가 있을 때, 특정 도메인 파인튜닝에 의한 가중치 변화량 $\Delta W$는 **본질적으로 낮은 고유 랭크(Intrinsic Rank $r \ll \min(d, k)$)를 갖는다**는 가설에 기반합니다:
 
 ```
 [ LoRA (Low-Rank Adaptation) 순전파 연산 구조 ]
@@ -172,21 +172,25 @@ Facebook AI Research(Meta) 연구진이 RoBERTa, GPT 등을 무작위 부분 공
 출력 h = W_0 · x + ΔW · x
        = W_0 · x + (α / r) · (B · A) · x
 
+• x   : 입력 벡터 (k 차원 = d_in)
+• h   : 출력 벡터 (d 차원 = d_out)
 • W_0 : 고정된(Frozen) 사전학습 가중치 (d × k 차원, 역전파 미적용)
-• A   : 저차원 다운프로젝션 행렬 (r × k 차원, N(0, σ²) 가우시안 초기화)
-• B   : 저차원 업프로젝션 행렬   (d × r 차원, 0으로 초기화 ➔ 초기 ΔW = 0)
+• A   : 저차원 다운프로젝션 행렬 (r × k 차원, k차원 ➔ r차원으로 축소, N(0, σ²) 초기화)
+• B   : 저차원 업프로젝션 행렬   (d × r 차원, r차원 ➔ d차원으로 복원, 0으로 초기화 ➔ 초기 ΔW = 0)
 • r   : LoRA 랭크 (보통 r = 2, 4, 8, 16, 32, 64 등 아주 작은 값)
 • α   : 스케일링 하이퍼파라미터 (어댑터 출력의 기여도 제어, 보통 α = 2r 또는 α = r)
+
+※ 행렬 곱 차원 일치: (d × r) × (r × k) = (d × k) ➔ W_0와 완벽히 동일한 차원으로 합산 가능!
 ```
 
 ```mermaid
 flowchart LR
-    X["입력 벡터 x (k 차원)"] --> Freeze["고정된 원본 가중치 W_0 (d × k)\n(역전파 동결)"]
-    X --> A["LoRA 행렬 A (r × k)\n(가우시안 초기화)"]
-    A --> B["LoRA 행렬 B (d × r)\n(0으로 초기화)"]
+    X["입력 벡터 x (k 차원: d_in)"] --> Freeze["고정된 원본 가중치 W_0 (d × k)\n(역전파 동결)"]
+    X --> A["LoRA 행렬 A (r × k)\n(k차원 ➔ r차원 다운프로젝션)"]
+    A --> B["LoRA 행렬 B (d × r)\n(r차원 ➔ d차원 업프로젝션)"]
     B --> Scale["스케일링 (α / r)"]
     Freeze & Scale --> Sum["(+) 요소별 합산"]
-    Sum --> Output["최종 출력 벡터 h (d 차원)"]
+    Sum --> Output["최종 출력 벡터 h (d 차원: d_out)"]
 ```
 
 ---
