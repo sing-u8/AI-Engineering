@@ -113,23 +113,25 @@ flowchart LR
 
 ---
 
-## 5. 합성 데이터 품질 검증 (Data Verification Loop)
+## 5. 합성 데이터 품질 검증 및 실무 테크닉 (pp. 388 ~ 396) ⭐
 
-합성 데이터는 환각(Hallucination)이 섞일 위험이 있으므로 3단계 검증 루프를 반드시 거쳐야 합니다:
+합성 데이터는 환각(Hallucination)이 섞일 위험이 있으므로 체계적인 검증 루프와 편향 상쇄 기법이 필수적입니다:
 
+```mermaid
+flowchart TD
+    Syn["생성된 원시 합성 데이터"] --> Filter1["1단계: 규칙 필터링 (정규식/반복문/거절 문구 삭제)"]
+    Filter1 --> Filter2["2단계: 실행 기반 검증 (Python 인터프리터 / SymPy 수식 검증)"]
+    Filter2 --> Filter3["3단계: AI 심판관 (LLM-as-a-Judge 순서 교차 검증)"]
+    Filter3 --> Pool[("🏆 최종 검증된 고품질 데이터셋")]
 ```
-[ 합성 데이터 3단계 검증 파이프라인 ]
 
-1단계 : 규칙 기반 필터링 (Rule-based Filtering)
-        - 정규식으로 반복 문구, 빈 문자열, 거절 응답("I cannot fulfill...") 자동 삭제.
-
-2단계 : 실행 기반 검증 (Execution Verification) 🏆
-        - 코딩 데이터: Python 인터프리터에서 실제 실행 및 단위 테스트 통과 여부 검증.
-        - 수학 데이터: SymPy 엔진으로 최종 정답 수치 일치 검증.
-
-3단계 : LLM-as-a-Judge 평가
-        - 상위 프론티어 모델(GPT-4)을 채점관으로 두어 1~5점 척도로 정확성/유용성 평가 후 상위 4점 이상만 채택.
-```
+### ① 실무 합성 데이터 3대 검증 테크닉 (Book pp. 388 ~ 390)
+1. **코드 왕복 역번역 검증 (Code Back-Translation Verification):**  
+   원본 소스 코드 ➔ AI로 설명서/독스트링 생성 ➔ 설명서만 보고 다시 AI로 코드 재작성 ➔ **재작성된 코드가 원본 코드와 동일하게 동작할 때만** 해당 설명-코드 쌍을 학습셋으로 최종 채택.
+2. **NVIDIA의 선호도 판정 편향 상쇄 (Position Bias Mitigation, NVIDIA 2024):**  
+   LLM 채점관은 첫 번째 제시된 답변을 편애하는 **첫 번째 위치 편향(First-Position Bias)**을 가집니다. NVIDIA는 답변의 순서를 `(A, B)`와 `(B, A)`로 맞바꿔 2번 질문한 뒤, **두 번 모두 일관되게 동일한 답변을 승자로 선택한 삼중쌍(Prompt, Winner, Loser)만 DPO/RLHF 학습 데이터로 수집**했습니다.
+3. **대규모 합성 사전학습 데이터셋: Cosmopedia (Allal et al., 2024):**  
+   Hugging Face는 Mixtral-8x7B를 활용하여 250억 토큰(25B tokens) 규모의 합성 교과서, 기술 블로그, 교육용 기사를 생성하여 사전 학습에 투입함으로써 합성 데이터만으로도 강력한 기본 지능을 구축할 수 있음을 증명했습니다.
 
 ---
 
