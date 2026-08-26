@@ -32,20 +32,43 @@ tags: [model-merging, slerp, ties-merging, dare, task-arithmetic, frankenmoe, so
 
 ---
 
-## 1. 앙상블 vs 모델 병합 (Figure 7-13, 7-14, pp. 342 ~ 345)
+## 1. 모델 병합의 필요성과 앙상블 비교 (Figure 7-13, 7-14, pp. 347 ~ 349)
+
+### ① 멀티태스크 파인튜닝의 3가지 접근법
+단일 모델에 여러 작업(수학, 코딩, 의료 상담 등) 능력을 주입하고자 할 때 취할 수 있는 전략 비교:
+
+1. **동시 파인튜닝 (Simultaneous Finetuning):**  
+   모든 태스크 데이터셋을 하나로 섞어 한꺼번에 학습.  
+   ❌ **한계:** 여러 기술을 동시에 학습하는 것은 난이도가 높아 훨씬 방대한 데이터와 학습 시간이 소모됨.
+2. **순차 파인튜닝 (Sequential Finetuning):**  
+   태스크 A ➔ 태스크 B ➔ 태스크 C를 차례대로 순차 학습.  
+   ❌ **치명적 한계 (파국적 망각 / Catastrophic Forgetting, Kirkpatrick et al., 2016):** 새로운 태스크 B를 배울 때 이전 태스크 A의 가중치가 덮어씌워져 기존 능력이 급격히 붕괴됨.
+3. **병렬 파인튜닝 + 모델 병합 (Parallel FT + Merging) 🏆:**  
+   동일한 베이스 모델을 출발점으로 각 태스크를 **독립적으로 병렬 파인튜닝한 뒤, 최종 가중치를 하나로 병합**.  
+   🚀 **장점:** 파국적 망각 위험 없이 각 태스크의 고유 능력을 깊이 있게 학습시키고 단일 모델로 통합!
+
+---
+
+### ② 온디바이스(On-Device) 배포와 연합 학습(Federated Learning)
+* **온디바이스 경량 배포:** 스마트폰, 스마트워치, 자율주행차, 로봇 등 메모리가 극도로 제한된 엣지 디바이스에 여러 개의 특화 모델을 다 올릴 수 없을 때, **단 하나의 병합 모델로 압축 탑재**하여 클라우드 API 통신 비용을 없애고 개인정보를 기기 내부에 격리(Privacy 보존).
+* **연합 학습 (Federated Learning, McMahan et al., 2016):** 각 사용자 디바이스에서 독립적으로 학습된 로컬 모델 가중치들을 중앙 서버에서 주기적으로 산술 병합하여 전사 베이스 모델을 지속 개선.
+
+---
+
+### ③ 앙상블(Ensemble) vs 모델 병합(Model Merging) 비교 (Figure 7-13)
 
 ```mermaid
 flowchart TD
-    subgraph Ensemble["1. 전통적 앙상블 (Ensembling)"]
+    subgraph Ensemble["1. 전통적 앙상블 (Ensembling) - 출력 결합"]
         E1["수학 특화 모델 (14GB)"]
         E2["코딩 특화 모델 (14GB)"]
         E3["의료 특화 모델 (14GB)"]
-        Vote["다수결 투표 / 결과 집계"]
+        Vote["다수결 투표 / 결과 앙상블"]
         E1 & E2 & E3 --> Vote
-        NoteE["❌ GPU 메모리 3배 (42GB) 소모\n❌ 3회 추론 실행으로 지연시간 3배"]
+        NoteE["❌ GPU 메모리 3배 (42GB) 소모\n❌ 3회 독립 추론 실행으로 지연시간/비용 3배"]
     end
 
-    subgraph Merging["2. 모델 병합 (Model Merging) 🏆"]
+    subgraph Merging["2. 모델 병합 (Model Merging) - 가중치 합성 🏆"]
         M1["수학 가중치 W_Math"]
         M2["코딩 가중치 W_Code"]
         M3["의료 가중치 W_Med"]
@@ -58,22 +81,41 @@ flowchart TD
 
 | 비교 항목 | 전통적 앙상블 (Ensemble) | 모델 병합 (Model Merging) 🏆 |
 | :--- | :--- | :--- |
+| **결합 대상** | 모델의 **출력값 (Outputs / Probabilities)** | 모델의 **가중치 매개변수 (Weights / Parameters)** |
 | **서빙 GPU 메모리** | $N$개 모델 크기만큼 $N$배 폭증 (예: 42 GB) | **단 1개 모델 크기 그대로 유지 (14 GB)** |
 | **추론 지연시간 (Latency)** | $N$번의 순전파 실행으로 심각한 지연 발생 | **1번의 순전파로 완벽히 동일 (오버헤드 0%)** |
 | **추가 학습 비용** | 모델들을 합치기 위한 별도 학습 불필요 | **GPU 연산 없이 CPU RAM 상에서 즉시 가중치 합성** |
 
 ---
 
-## 2. 가중치 산술 연산과 태스크 산술 (Figure 7-15, pp. 345 ~ 348)
+### ④ 모델 병합의 3대 패러다임 (Figure 7-14)
+1. **합산 기반 (Summing):** 가중치 행렬을 산술 평균하거나 기하학적으로 보간 (선형 평균, Task Arithmetic, SLERP, TIES, DARE).
+2. **레이어 스태킹 (Layer Stacking):** 모델의 레이어를 수직으로 이어 붙여 모델 깊이(Depth)와 파라미터 체급을 확장 (Solar-10.7B).
+3. **연결 기반 (Concatenation):** 여러 모델을 전문가(Experts)로 수평 배치하고 라우터를 결합하여 MoE 구조로 변환 (FrankenMoE).
 
-### ① 태스크 벡터 (Task Vector, $\tau$)
+---
+
+## 2. 가중치 산술 연산과 태스크 산술 (Figure 7-15, pp. 349 ~ 352)
+
+### ① 선형 결합과 모델 수프 (Model Soups, Wortsman et al., 2022, Figure 7-15)
+동일한 베이스 모델 $A, B$의 가중치를 가중 평균(Weighted Average)하는 가장 단순한 방식입니다:
+
+$$\text{Merge}(A, B) = \frac{w_A A + w_B B}{w_A + w_B}$$
+
+* **Model Soups (Wortsman et al., 2022):** 서로 다른 하이퍼파라미터로 파인튜닝된 여러 모델의 가중치를 단순 평균하는 것만으로, 단일 모델 대비 벤치마크 정확도와 일반화 능력이 비약적으로 상승함을 입증.
+
+---
+
+### ② 태스크 벡터 (Task Vector, $\tau$)
 파인튜닝된 모델 가중치 $W_{\text{FT}}$에서 사전 훈련된 베이스 가중치 $W_{\text{Base}}$를 뺀 차이 벡터를 **태스크 벡터($\tau$)**라고 합니다:
 
 $$\tau = W_{\text{FT}} - W_{\text{Base}}$$
 
 태스크 벡터는 가중치 공간에서 **'특정 능력(코딩, 수학, 번역)을 향해 뻗어 있는 방향과 크기'**를 의미합니다.
 
-### ② 모델 능력의 덧셈과 뺄셈 (Task Arithmetic)
+---
+
+### ③ 모델 능력의 덧셈과 뺄셈 (Task Arithmetic)
 태스크 벡터들을 선형 결합(Linear Combination)하면 놀랍게도 모델의 능력을 더하거나 뺄 수 있습니다:
 
 $$W_{\text{Merged}} = W_{\text{Base}} + \lambda_1 \tau_{\text{Math}} + \lambda_2 \tau_{\text{Code}} - \lambda_3 \tau_{\text{Toxicity}}$$
