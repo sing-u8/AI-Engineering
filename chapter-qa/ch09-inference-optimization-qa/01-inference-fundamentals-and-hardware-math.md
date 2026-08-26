@@ -100,16 +100,41 @@ flowchart LR
     Mem --> Crit --> Comp
 ```
 
-### ① 연산 집약도 (Arithmetic Intensity, $I$) 수식
-$$\text{Arithmetic Intensity } (I) = \frac{\text{총 부동소수점 연산량 (FLOPs)}}{\text{메모리에서 읽고 쓴 총 바이트 수 (Bytes)}} \quad [\text{FLOP/Byte}]$$
+### ① 연산 집약도 ($I$)와 변곡점 ($I_{\text{crit}}$)의 수학적 정의
 
-### ② 변곡점 ($I_{\text{crit}}$) 수치 유도 (NVIDIA H100 SXM vs A100 SXM)
-* **NVIDIA H100 SXM (FP16 기준):**
-  * FP16 피크 연산력: $\approx 1,000\text{ TFLOP/s}$ ($10^{15}\text{ FLOP/s}$)
-  * HBM3 메모리 대역폭: $\approx 3.35\text{ TB/s}$ ($3.35 \times 10^{12}\text{ Bytes/s}$)
-  * **변곡점:** $I_{\text{crit}} = \frac{1000 \times 10^{12}}{3.35 \times 10^{12}} \approx \mathbf{298.5\text{ FLOP/Byte}}$
-* **엔지니어링 의미:**  
-  메모리에서 가중치 1바이트를 읽어올 때마다 **최소 300회 이상의 수학 연산을 수행해야만 GPU 연산 코어를 100% 낭비 없이 풀가동(Compute-bound)**할 수 있습니다. 배치 크기가 1인 디코딩 단계에서는 2바이트를 읽어 곱셈 2번($I = 1\text{ FLOP/Byte}$)만 하므로 **GPU 연산 코어의 99%가 놀고 있는 극심한 메모리 대역폭 병목**에 빠집니다.
+1. **연산 집약도 ($I$, Arithmetic Intensity):**  
+   내 AI 프로그램이 **"메모리에서 데이터 1바이트를 읽어올 때마다 몇 번의 수학 계산(FLOPs)을 수행하는가?"**를 나타내는 소프트웨어적 효율 지표입니다:
+   $$\text{Arithmetic Intensity } (I) = \frac{\text{총 부동소수점 연산량 (FLOPs)}}{\text{메모리에서 읽고 쓴 총 바이트 수 (Bytes)}} \quad [\text{FLOP/Byte}]$$
+
+2. **임계 변곡점 ($I_{\text{crit}}$, Critical Arithmetic Intensity):**  
+   GPU 하드웨어의 연산 코어가 **1초도 놀지 않고 100% 풀가동(Peak Compute)되기 위해 필수적으로 요구되는 '데이터 1바이트당 최소 연산 횟수 기준치'**입니다:
+   $$I_{\text{crit}} = \frac{\text{하드웨어 피크 연산력 (Peak FLOP/s)}}{\text{하드웨어 메모리 대역폭 (Memory Bandwidth Bytes/s)}} \quad [\text{FLOP/Byte}]$$
+
+---
+
+### ② $I < I_{\text{crit}}$ vs $I > I_{\text{crit}}$ 의 물리적 의미 (NVIDIA H100 실측 예시)
+
+* **NVIDIA H100 SXM 스펙 기준 (FP16):**
+  * FP16 피크 연산력: $1,000\text{ TFLOP/s} = 10^{15}\text{ FLOP/s}$
+  * HBM3 메모리 대역폭: $3.35\text{ TB/s} = 3.35 \times 10^{12}\text{ Bytes/s}$
+  * **하드웨어 요구 기준선:** $I_{\text{crit}} = \frac{1000 \times 10^{12}}{3.35 \times 10^{12}} \approx \mathbf{298.5\text{ FLOP/Byte}}$  
+  👉 *"H100 GPU는 메모리에서 1바이트를 가져왔으면 최소 300번은 계산해 줘야 연산 코어가 100% 풀가동된다!"*
+
+```
+[ 루프라인 모델 2대 영역 판정 기준 ]
+
+1. I < I_crit (메모리 대역폭 병목 / Memory-bound) 🐢 :
+   • 상황 : 내 작업의 연산 집약도(I = 1)가 하드웨어 요구선(I_crit = 300)에 한참 못 미침!
+   • 상태 : 1바이트를 가져와서 1번만 계산하고 끝나므로, 계산기는 300번 일할 수 있는 시간 중 299번의 시간을 멍하니 대기(Stall).
+   • 결과 : GPU 연산 코어의 99%가 놀고 있으며, 전체 속도는 '메모리가 데이터를 배달하는 속도'에 의해 결정됨.
+   • 대표 예시 : 단일 사용자 디코딩(Decode / Token Generation) 단계 (I ≈ 1 FLOP/Byte).
+
+2. I > I_crit (연산력 병목 / Compute-bound) 🚀 :
+   • 상황 : 내 작업의 연산 집약도(I = 1,000)가 하드웨어 요구선(I_crit = 300)을 훌쩍 뛰어넘음!
+   • 상태 : 1바이트를 가져와서 1,000번이나 우려먹으며 계산하므로, 메모리 배달 속도는 전혀 문제가 안 됨.
+   • 결과 : GPU의 연산 코어가 100% 풀가동되며, 전체 속도는 'GPU 계산기 자체의 연산 속도(TFLOP/s)'에 의해 결정됨.
+   • 대표 예시 : 1,000개 토큰을 한 번에 처리하는 프리필(Prefill) 단계 또는 대규모 배치 처리 (I ≫ 300 FLOP/Byte).
+```
 
 ---
 
