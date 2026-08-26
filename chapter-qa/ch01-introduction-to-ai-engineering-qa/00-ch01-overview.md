@@ -39,3 +39,12 @@ Chapter 1은 전통적인 머신러닝(ML) 엔지니어링과 **'AI 엔지니어
 * 1. 기술적 우위 (Technology Moats)
 * 2. 유통망과 사용자 확보 (Distribution Moats)
 * 3. 궁극의 무기: 데이터 플라이휠 (Data Flywheel) 구축 전략
+
+### [[05-foundation-model-use-cases|05. 파운데이션 모델의 8대 핵심 유스케이스]]
+* 생성형 AI가 활약하는 8가지 핵심 분야 (Coding, Image, Writing, Education 등)
+* 엔터프라이즈의 도입 전략 (내부망 vs 외부망)
+
+### [[06-planning-ai-applications|06. AI 애플리케이션 기획과 평가 기준]]
+* AI 도입의 목적(유스케이스 평가) 및 인간 개입 수준(Human-in-the-loop) 설정
+* 유용성 임계점(Usefulness Threshold) 및 기대치 설정
+* 기술의 빠른 발전에 대응하는 유지보수(Maintenance) 전략

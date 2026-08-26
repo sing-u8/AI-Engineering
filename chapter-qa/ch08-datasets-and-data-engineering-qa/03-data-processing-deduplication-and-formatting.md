@@ -1,9 +1,7 @@
 ---
 category: datasets-and-data-engineering
 title: "03. 데이터 검사, 중복 제거, 정제 및 표준 포맷팅 (pp. 396-403)"
-source: "AI Engineering · Chapter 8 (p.396-403)"
-tags: [data-processing, eda, verb-noun-distribution, deduplication, exact-dedup, minhash, lsh, perplexity-filtering, data-formatting, chatml, sharegpt, alpaca-format]
----
+tags: [data-processing, eda, verb-noun-distribution, deduplication, exact-dedup, minhash, lsh, perplexity-filtering, data-formatting, chatml, chat-templates]
 
 # 03. 데이터 검사, 중복 제거, 정제 및 표준 포맷팅
 
@@ -11,7 +9,7 @@ tags: [data-processing, eda, verb-noun-distribution, deduplication, exact-dedup,
 > **"수집된 원시 데이터의 30~50%는 쓸모없는 중복과 노이즈입니다. 철저한 데이터 엔지니어링 파이프라인 없이는 모델의 진정한 잠재력을 끌어낼 수 없습니다."**  
 > 데이터 수집과 증강이 끝난 후, 모델 학습에 투입하기 전 **데이터 탐색적 분석(EDA), 중복 제거(Deduplication), 품질 필터링, 그리고 표준 포맷팅**은 필수적인 전처리 관문입니다.  
 > 특히 중복 데이터는 모델의 단순 암기(Memorization)를 유발하고 벤치마크 평가를 오염(Contamination)시키는 치명적인 악영향을 미칩니다 (Table 8-3).  
-> 본 섹션에서는 `(동사, 직접목적어)` 쌍을 통한 **데이터 다양성 시각화(Figure 8-6)**와 응답 길이 분포 분석(Figure 8-7), 수십억 건의 텍스트에서 유사 문서를 초고속으로 걸러내는 **MinHash 및 LSH(Locality-Sensitive Hashing) 중복 제거 알고리즘**, 퍼플렉서티(Perplexity) 기반 노이즈 필터링, 그리고 **ChatML 및 ShareGPT 표준 학습 데이터 포맷팅(Table 8-4)**을 완벽히 정리합니다.
+> 본 섹션에서는 `(동사, 직접목적어)` 쌍을 통한 **데이터 다양성 시각화(Figure 8-6)**와 응답 길이 분포 분석(Figure 8-7), 수십억 건의 텍스트에서 유사 문서를 초고속으로 걸러내는 **MinHash 및 LSH(Locality-Sensitive Hashing) 중복 제거 알고리즘**, 퍼플렉서티(Perplexity) 기반 노이즈 필터링, 그리고 **ChatML 등 표준 학습 데이터 포맷팅(Table 8-4)**을 완벽히 정리합니다.
 
 ---
 
@@ -24,7 +22,7 @@ tags: [data-processing, eda, verb-noun-distribution, deduplication, exact-dedup,
 | **Figure 8-6** | Alpaca 데이터셋의 (동사, 직접목적어) 쌍 중심 원형 분포 분석 (지시 다양성 검증) | **p. 398** | 1. 데이터 탐색적 분석(EDA) |
 | **Figure 8-7** | GPT-4(평균 1,200토큰)와 GPT-3(평균 400토큰)의 응답 길이 분포 비교 (품질 및 스타일 차이) | **p. 399** | 1. 데이터 탐색적 분석(EDA) |
 | **Table 8-3** | 완전 중복 및 의미론적 근사 중복 데이터가 모델 암기와 성능 평가를 왜곡하는 실증 예시표 | **p. 400** | 2. 중복 제거 (Deduplication) |
-| **Table 8-4** | 원시 비정형 데이터로부터 ChatML, Alpaca 포맷, JSON 키-값 형태로 변환된 표준 학습 데이터 예시표 | **p. 402** | 4. 데이터 표준 포맷팅 |
+| **Table 8-4** | 원시 비정형 데이터로부터 ChatML 포맷 등 템플릿 형태로 변환된 표준 학습 데이터 예시표 | **p. 402** | 4. 데이터 표준 포맷팅 |
 
 ---
 
@@ -106,21 +104,16 @@ flowchart TD
 
 ## 4. 데이터 표준 포맷팅 (Table 8-4, pp. 401 ~ 403)
 
-파인튜닝 프레임워크와 모델 아키텍처에 맞게 데이터를 표준 JSON 포맷으로 변환해야 합니다:
+파인튜닝 프레임워크와 모델 아키텍처에 맞게 데이터는 모델이 기대하는 특정 챗 템플릿(Chat Template) 포맷으로 변환되어야 합니다:
 
-### ① 주요 3대 학습 데이터 포맷 비교 (Table 8-4)
+### ① 지시 데이터(Instruction Data) 구조
+SFT(Supervised Fine-Tuning)를 진행할 때 데이터는 대체로 `(instruction, response)` 형태로 구성되며, `instruction`은 다시 `(system prompt, user prompt)`로 분해될 수 있습니다. 
 
-#### 1. Alpaca 포맷 (단일 턴 지시 데이터에 최적)
-```json
-{
-  "instruction": "다음 영문 텍스트를 한국어로 번역하라.",
-  "input": "Large Language Models are transforming AI.",
-  "output": "거대 언어 모델은 AI를 변화시키고 있습니다."
-}
-```
+#### 프롬프트 간결화
+파인튜닝에 사용되는 지시문은 프롬프트 엔지니어링에 쓰이던 긴 지시문과 달리 퓨샷 예제(Few-shot examples)나 지나치게 장황한 태스크 설명을 포함할 필요가 없습니다. 훈련 데이터가 충분하다면 모델은 그 데이터의 패턴을 통해 기대하는 동작을 스스로 학습할 수 있습니다.
 
-#### 2. ChatML 포맷 (OpenAI 및 현대 오픈소스 표준 🏆)
-특수 토큰(`<|im_start|>`, `<|im_end|>`)으로 발화자(Role)의 경계를 명확히 분리하여 프롬프트 인젝션과 역할 혼선을 차단:
+### ② 대표적인 대화 포맷: ChatML 포맷
+다양한 모델이 각자의 챗 템플릿을 요구하지만, OpenAI의 ChatML 포맷이 널리 쓰이는 표준 중 하나입니다. 특수 토큰(`<|im_start|>`, `<|im_end|>`)으로 발화자(Role)의 경계를 명확히 분리하여 역할 혼선을 차단합니다:
 ```
 <|im_start|>system
 당신은 친절하고 전문적인 금융 상담 비서입니다.<|im_end|>
@@ -128,19 +121,6 @@ flowchart TD
 ISA 계좌의 비과세 한도가 얼마인가요?<|im_end|>
 <|im_start|>assistant
 일반형 기준 순소득 200만 원(서민형은 400만 원)까지 비과세 혜택이 적용됩니다.<|im_end|>
-```
-
-#### 3. ShareGPT / OpenAI Messages 포맷 (멀티턴 대화 표준)
-```json
-{
-  "messages": [
-    {"role": "system", "content": "너는 사내 결제 개발 지원 봇이다."},
-    {"role": "user", "content": "카카오페이 정기결제 API 어떻게 호출해?"},
-    {"role": "assistant", "content": "PaySDK.subscriptions.register()를 호출하시면 됩니다."},
-    {"role": "user", "content": "에러 코드 4001 뜨면 어떻게 해야 해?"},
-    {"role": "assistant", "content": "4001은 사용자 잔액 부족 에러입니다. 재시도 로직을 작성하세요."}
-  ]
-}
 ```
 
 ---

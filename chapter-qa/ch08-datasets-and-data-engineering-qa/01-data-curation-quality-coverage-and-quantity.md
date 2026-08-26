@@ -2,7 +2,7 @@
 category: datasets-and-data-engineering
 title: "01. 데이터 큐레이션: 품질, 다양성 및 데이터 규모 (pp. 363-380)"
 source: "AI Engineering · Chapter 8 (p.363-380)"
-tags: [data-curation, data-quality, lima-hypothesis, data-diversity, domain-mix, llama-3, data-quantity, scaling-laws, flan, data-annotation, inter-annotator-agreement, cohens-kappa]
+tags: [data-curation, data-quality, lima-hypothesis, data-diversity, domain-mix, llama-3, data-quantity, scaling-laws, flan, data-annotation, inter-annotator-agreement]
 ---
 
 # 01. 데이터 큐레이션: 품질, 다양성 및 데이터 규모
@@ -11,7 +11,7 @@ tags: [data-curation, data-quality, lima-hypothesis, data-diversity, domain-mix,
 > **"5만 개의 노이즈 데이터보다 엄선된 1천 개의 고품질 데이터가 훨씬 더 강력하고 정렬된 모델을 만듭니다."**  
 > 데이터 중심 AI(Data-Centric AI)의 핵심은 무조건 많은 양(Quantity)을 긁어모으는 것이 아니라, **높은 품질(Quality)과 광범위한 다양성(Coverage)**을 정밀하게 확보하는 것입니다.  
 > 2023년 Meta의 **LIMA 가설 (Less Is More for Alignment)**은 정밀하게 큐레이션된 단 1,000개의 예시만으로 52,000개의 Alpaca나 DaVinci 기반 모델을 압도할 수 있음을 실증했습니다 (Figure 8-1).  
-> 또한 Llama 3의 **사전 학습 ➔ SFT (Supervised Fine-Tuning) ➔ 선호도 튜닝 (DPO / RLHF) 단계별 최적 도메인 믹스 비율(Table 8-1)**, 데이터가 적을 때와 많을 때의 모델 체급별 성능 곡선(Figure 8-2), 태스크 다양성 증가에 따른 한계 수렴 법칙(Figure 8-4), 그리고 **어노테이터 간 일치도(Cohen's Kappa)**를 활용한 데이터 라벨링 품질 관리 거버넌스를 완벽하게 정리합니다.
+> 또한 Llama 3의 **사전 학습 ➔ SFT (Supervised Fine-Tuning) ➔ 선호도 튜닝 (DPO / RLHF) 단계별 최적 도메인 믹스 비율(Table 8-1)**, 데이터가 적을 때와 많을 때의 모델 체급별 성능 곡선(Figure 8-2), 태스크 다양성 증가에 따른 한계 수렴 법칙(Figure 8-4), 그리고 **어노테이터 간 불일치도(Inter-Annotator Disagreement)**를 관리하는 데이터 라벨링 품질 거버넌스를 완벽하게 정리합니다.
 
 ---
 
@@ -131,25 +131,20 @@ $$\text{Performance Gain} \propto \log(\text{Dataset Size})$$
 2. **코드 레포지토리 & PR Diff:** 코드 변경 이력, 커밋 메시지, 코드 리뷰 피드백을 통해 코딩 지시 데이터셋 구축.
 3. **웹 크롤링 주의점:** 사이트별 `robots.txt` 크롤링 규정, 저작권 라이선스(CC-BY, MIT vs 상업적 이용 불가 라이선스) 준수 확인.
 
-### ② 인간 어노테이션 품질 관리와 일치도(Inter-Annotator Agreement)
-크라우드소싱 작업자나 내부 전문가를 통해 데이터 라벨링을 진행할 때, 라벨의 신뢰성을 검증하기 위해 **어노테이터 간 일치도**를 측정해야 합니다:
+### ② 인간 어노테이션 품질 관리와 불일치도(Inter-Annotator Disagreement)
+크라우드소싱 작업자나 내부 전문가를 통해 데이터 라벨링을 진행할 때, 라벨의 신뢰성을 검증하기 위해 **어노테이터 간 불일치도**를 측정하고 관리해야 합니다:
 
-#### 코헨의 카파 계수 (Cohen's Kappa, $\kappa$)
-두 명의 평가자가 내린 평가의 일치도를 단순 일치 확률($P_o$)에서 우연에 의한 일치 확률($P_e$)을 제외하고 계산합니다:
-
-$$\kappa = \frac{P_o - P_e}{1 - P_e}$$
-
-* $\kappa < 0.40$: 일치도 불량 (가이드라인이 모호함)
-* $0.60 \le \kappa < 0.80$: 양호한 일치도
-* $\kappa \ge \mathbf{0.80}$: 매우 우수한 고품질 데이터셋 🏆
+* 각 예제에 대해 두 명 이상의 어노테이터가 라벨링을 수행하도록 합니다.
+* 평가자 간 의견 불일치(Disagreement)가 발생한 데이터 포인트를 식별합니다.
+* 충돌하는 어노테이션을 검토하여 모호한 가이드라인을 수정하거나, 다수결 또는 도메인 리드의 최종 검수를 통해 충돌을 해결합니다.
 
 ```
-[ 어노테이션 품질 관리 4대 원칙 ]
+[ 어노테이션 품질 관리 핵심 원칙 ]
 
 1. 모호성 없는 명확한 라벨링 가이드라인(Annotation Guidelines) 작성
-2. 5~10개의 정답이 확정된 '골든 테스트 케이스(Golden Questions)'를 무작위 삽입하여 작업자 신뢰도 실시간 평가
-3. 평가자 간 의견 불일치 발생 시 3인 다수결(Tie-breaking) 또는 도메인 리드 최종 검수 진행
-4. 주기적인 Cohen's Kappa 측정을 통해 가이드라인 개정 및 재교육
+2. 각 예제에 대해 다중 어노테이션 수행 후 어노테이터 간 불일치도 계산
+3. 충돌하는 어노테이션 검토 및 갈등 해결 (다수결 또는 도메인 전문가 개입)
+4. 불일치 원인을 분석하여 지속적으로 가이드라인 개정 및 어노테이터 재교육
 ```
 
 ---

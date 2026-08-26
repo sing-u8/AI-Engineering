@@ -1,9 +1,7 @@
 ---
 category: datasets-and-data-engineering
 title: "02. 데이터 증강과 AI 기반 합성 데이터 생성 기법 (pp. 380-396)"
-source: "AI Engineering · Chapter 8 (p.380-396)"
-tags: [data-augmentation, synthetic-data, back-translation, bias-mitigation, self-instruct, stanford-alpaca, evol-instruct, ultrachat, model-distillation, llm-as-a-judge]
----
+tags: [data-augmentation, synthetic-data, back-translation, bias-mitigation, self-instruct, stanford-alpaca, reverse-instruction, ultrachat, model-distillation, llm-as-a-judge]
 
 # 02. 데이터 증강과 AI 기반 합성 데이터 생성 기법
 
@@ -11,7 +9,7 @@ tags: [data-augmentation, synthetic-data, back-translation, bias-mitigation, sel
 > **"인간이 수작업으로 수백만 개의 데이터를 만드는 시대는 끝났습니다. 이제는 소수의 고품질 시드(Seed)를 바탕으로 LLM이 스스로 데이터를 생성하고 검증하는 '합성 데이터(Synthetic Data) 플라이휠'의 시대입니다."**  
 > 데이터 수집의 높은 비용과 개인정보(PII) 규제, 콜드 스타트 문제를 해결하기 위해 **합성 데이터**는 현대 AI 엔지니어링의 필수 무기가 되었습니다.  
 > 본 섹션에서는 역번역과 편향 완화를 위한 **전통적 데이터 증강 기법(Table 8-2)**부터, 175개 시드 태스크로 52,000개의 지시 데이터를 자동 생성한 **Self-Instruct 및 Stanford Alpaca 파이프라인(Figure 8-5)**,  
-> 지시문의 난이도를 단계별로 진화시키는 **Evol-Instruct**, 에이전트 간 시뮬레이션으로 멀티턴 대화를 구축하는 **UltraChat**, 그리고 거대 모델의 지능을 소형 모델로 전이시키는 **교사-학생 지식 증류 (Model Distillation)**까지 최신 합성 데이터 기법을 완벽히 정리합니다.
+> 고품질 긴 문서를 기반으로 지시문을 역생성하는 **역-지시(Reverse Instruction)**, 에이전트 간 시뮬레이션으로 멀티턴 대화를 구축하는 **UltraChat**, 그리고 거대 모델의 지능을 소형 모델로 전이시키는 **교사-학생 지식 증류 (Model Distillation)**까지 최신 합성 데이터 기법을 완벽히 정리합니다.
 
 ---
 
@@ -77,20 +75,16 @@ flowchart TD
 
 ---
 
-## 3. 고도화된 합성 기법: Evol-Instruct & UltraChat (pp. 392 ~ 395)
+## 3. 고도화된 합성 기법: 역-지시(Reverse Instruction) & UltraChat (pp. 389 ~ 390, 392 ~ 395)
 
-단순한 Self-Instruct는 쉬운 질문만 반복 생성하는 경향이 있습니다. 이를 극복하기 위해 난이도와 멀티턴을 진화시키는 기법들이 개발되었습니다:
+단순한 지시문 생성 방식은 긴 응답을 유도할 때 AI의 환각을 초래할 위험이 있습니다. 이를 극복하기 위해 고품질 문서 기반 생성 기법과 멀티턴 시뮬레이션 기법이 쓰입니다:
 
 ```
-[ Evol-Instruct 2대 진화 메커니즘 (WizardLM) ]
+[ 역-지시 (Reverse Instruction) 메커니즘 ]
 
-1. 심도 진화 (In-Depth Evolution) - 난이도 상승 :
-   • 제약 조건 추가 (Add Constraints) : "단, 파이썬 내장 함수를 쓰지 말고 시간복잡도 O(N)으로 구현해."
-   • 추론 심화 (Deepen Reasoning)     : "단순 결론 대신 왜 그렇게 되는지 3단계 증명 과정을 포함해."
-   • 입력 복잡화 (Complicate Input)   : 문제 설명에 여러 예외 조건과 코너 케이스 추가.
-
-2. 너비 진화 (In-Breadth Evolution) - 도메인 확장 :
-   • 완전히 새로운 주제나 비인기 전문 도메인(양자역학, 해양법)으로 지시문 변이 생성.
+* 원리: 환각 없이 고품질의 긴 응답을 얻기 위해, 위키피디아, 소설, 전문 서적 등 '기존에 사람이 작성한 긴 고품질 문서'를 먼저 확보한 뒤, AI에게 "이 문서를 답변으로 유도할 수 있는 프롬프트(질문)를 역으로 생성해"라고 지시합니다.
+* 장점: 답변(Response) 자체가 이미 인간이 검증한 고품질 실제 문서이므로 모델이 긴 글을 생성할 때 환각(Hallucination)에 빠지는 치명적인 단점을 방지할 수 있습니다.
+* 응용: 약한 모델로 고품질 지시 데이터를 생성하고 자체 재학습하여 모델 성능을 지속적으로 끌어올릴 수 있습니다.
 ```
 
 * 💬 **UltraChat (멀티턴 대화 시뮬레이션):**  
