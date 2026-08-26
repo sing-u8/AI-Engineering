@@ -58,9 +58,19 @@ flowchart TD
 | **Unsloth** | Triton 커널 수동 재작성으로 역전파 연산 가속, LoRA/QLoRA 학습 속도 **2~5배 가속**, **VRAM 소모 70~80% 절감** | 단일 GPU(RTX 3090/4090, A100 1장) 환경에서 빠른 실험 |
 | **LLaMA-Factory** | 100개 이상의 오픈소스 모델 지원, Gradio 기반 GUI 웹 인터페이스 제공, SFT/DPO/PPO 올인원 지원 | 노코드/웹 UI로 빠르게 파이프라인을 검증하고 싶을 때 |
 | **Axolotl** | 선언적 YAML 설정 파일로 전체 학습 파이프라인 제어, 다양한 어텐션 메커니즘(FlashAttention-2) 및 패킹 지원 | 재현성이 중요한 팀 단위 엔지니어링 및 클라우드 클러스터 학습 |
+| **LitGPT (Lightning AI)** | PyTorch Lightning 기반의 가볍고 모듈화된 파인튜닝/사전학습/서빙 통합 프레임워크 | 엔지니어가 직접 코드를 수정하며 커스텀 아키텍처를 실험할 때 |
 | **Hugging Face TRL** | `SFTTrainer`, `DPOTrainer` 등 트랜스포머 표준 생태계와의 완벽한 호환성, 커스텀 데이터셋 연동 용이 | 파이썬 코드로 직접 파이프라인을 세밀하게 제어할 때 |
 
-### ② 다중 GPU 분산 학습 백엔드 (Distributed Training)
+---
+
+### ② 베이스 모델 선정 및 라이선스 고려사항 (pp. 357 ~ 358)
+* **모델 저장소 (Model Registries):** Hugging Face Model Hub, Ollama, 제조사 공식 레포지토리 등에서 검증된 베이스 가중치를 다운로드합니다.
+* **라이선스 제약 확인:**
+  * **완전 상업적 허용:** Apache 2.0, MIT 라이선스 (예: Mistral-7B, Qwen2.5) ➔ 제약 없이 상업적 서비스 및 SaaS 배포 가능.
+  * **조건부 상업적 허용:** Llama 3 Community License (월간 활성 사용자 7억 명 이하 등 특정 조건 충족 필요).
+  * **비상업적 연구 전용:** CC-BY-NC 라이선스 ➔ 상업적 제품화 불가.
+
+### ③ 다중 GPU 분산 학습 백엔드 (Distributed Training)
 단일 머신의 VRAM을 초과하는 대규모 모델이나 풀 파인튜닝을 진행할 때는 분산 학습 프레임워크가 필수적입니다:
 * **PyTorch DDP:** 각 GPU마다 모델 전체를 복제하고 그래디언트만 올리듀스(All-Reduce) 동기화 (모델이 단일 GPU에 들어갈 때만 사용 가능).
 * **PyTorch FSDP (Fully Sharded Data Parallel):** 가중치, 그래디언트, 옵티마이저 상태를 여러 GPU에 걸쳐 조각내어(Sharding) 저장함으로써 거대 모델 학습 가능.
@@ -113,9 +123,8 @@ flowchart TD
 * **큰 배치 크기 ($32 \sim 128+$):** 여러 데이터의 그래디언트가 평균화되어 안정적이고 신뢰할 수 있는 방향으로 수렴하며 처리 속도가 빨라짐.
 * ❌ **하드웨어 메모리 병목:** 거대 LLM은 모델 가중치와 활성화 메모리 때문에 GPU VRAM에 큰 배치를 올릴 수 없습니다 (Batch Size = 1 또는 2만 올려도 OOM 발생).
 
-### ② 그래디언트 누적 (Gradient Accumulation)의 원리
-
-하드웨어 메모리 한계로 인해 실제 GPU에는 작은 마이크로 배치(Micro-batch)만 올리면서도, 수학적으로는 큰 배치 크기를 적용한 것과 100% 동일한 효과를 내는 기법입니다.
+### ② 그래디언트 누적 (Gradient Accumulation, Watcharapichat et al., 2016)
+하드웨어 메모리 한계로 인해 실제 GPU에는 작은 마이크로 배치(Micro-batch)만 올리면서도, 수학적으로는 큰 배치 크기를 적용한 것과 100% 동일한 효과를 내는 기법입니다 (분산 학습 시스템 연구인 *Ako* 논문에서 출발):
 
 ```mermaid
 flowchart TD
@@ -190,16 +199,19 @@ $$\text{Training Sample} = \underbrace{\text{"다음 영문 기사를 한국어�
 * **추론(Inference) 환경의 본질:** 실제 서비스 환경에서 프롬프트는 사용자가 입력하는 데이터이며 모델이 생성하는 대상이 아닙니다. 모델이 생성해야 하는 것은 오직 **응답(Response)**입니다.
 * 만약 프롬프트 토큰에 대해서도 동일한 손실(Cross-Entropy Loss)을 계산하면, 모델은 '사용자 프롬프트 텍스트 자체를 예측하는 데' 아까운 파라미터 용량을 낭비하게 됩니다.
 
-### ② 손실 마스킹(Loss Masking) 메커니즘
-* **프롬프트 손실 가중치 (Prompt Loss Weight):**
-  * **100% (Default LM):** 프롬프트와 응답 모두 동일하게 손실 계산 (비효율적).
-  * **0% (Response-Only Loss Masking 🏆):** **프롬프트 토큰의 레이블을 `-100` (PyTorch `CrossEntropyLoss`의 `ignore_index`)으로 설정**하여 역전파 그래디언트 계산에서 완전히 배제하고, 오직 응답 토큰에 대해서만 손실을 100% 집중 계산.
-  * **10%:** 프롬프트 문맥 이해를 위해 아주 약한 손실만 부여하는 절충안.
+### ② 프롬프트 손실 가중치 (Prompt Loss Weight) 설정 비교 (pp. 360 ~ 361)
+프롬프트 손실 가중치는 프롬프트 토큰이 전체 손실에 기여하는 비중을 결정합니다:
+
+| 가중치 설정 | 동작 메커니즘 | 학습 효과 및 장단점 |
+| :--- | :--- | :--- |
+| **100% (Default LM)** | 프롬프트와 응답의 모든 토큰에 대해 동일한 언어 모델 손실 계산 | 사전학습 방식 그대로 진행되며, 지시문 생성에 불필요한 가중치 낭비 발생 |
+| **10% (Framework Default)** | 프롬프트 손실을 10%만 반영하고 응답 손실을 90% 반영 | 프롬프트 구조 이해를 보조하면서 응답 생성에 집중하는 절충형 기본값 |
+| **0% (Response-Only Masking) 🏆** | 프롬프트 토큰 레이블을 `-100`으로 마스킹하여 오직 응답 토큰에서만 손실 계산 | **실무 SFT 절대 표준 🏆** (추론 환경과 완벽히 일치하여 최고 성능 달성) |
 
 ```python
 # PyTorch / Hugging Face SFTTrainer의 DataCollatorForCompletionOnlyLM 원리
 labels = input_ids.clone()
-# 프롬프트 영역의 인덱스를 찾아 -100으로 마스킹 (손실 계산 제외)
+# 프롬프트 영역의 인덱스를 찾아 -100(ignore_index)으로 마스킹 (손실 계산 제외)
 labels[:prompt_end_idx] = -100  
 loss = cross_entropy_loss(logits, labels)  # 응답 토큰에서만 loss 발생!
 ```
