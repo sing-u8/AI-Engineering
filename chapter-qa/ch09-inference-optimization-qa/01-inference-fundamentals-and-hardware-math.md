@@ -72,9 +72,10 @@ flowchart TD
 ```mermaid
 flowchart LR
     subgraph Roofline["루프라인 모델 2대 영역 (Figure 9-2)"]
-        Mem["1. 메모리 대역폭 병목 영역 (Memory-bound)\n- 연산 집약도 I < I_crit\n- 달성 성능 = 대역폭 × 연산집약도\n- 💡 해결책: 가중치 양자화, KV 캐시 절감"]
-        Crit(("변곡점 (Knee Point)\nI_crit = Peak FLOPs / Bandwidth"))
-        Comp["2. 연산력 병목 영역 (Compute-bound)\n- 연산 집약도 I > I_crit\n- 달성 성능 = 하드웨어 피크 FLOP/s\n- 💡 해결책: 배치 크기 확대, 연산자 융합")]
+        direction LR
+        Mem["1. 메모리 대역폭 병목 (Memory-bound)<br/>• 연산 집약도 I &lt; I_crit<br/>• 달성 성능 = 대역폭 × 연산집약도<br/>• 💡 대책: 가중치 양자화, KV 캐시 절감"]
+        Crit["변곡점 (Knee Point)<br/>I_crit = Peak FLOPs / Bandwidth"]
+        Comp["2. 연산력 병목 (Compute-bound)<br/>• 연산 집약도 I &gt; I_crit<br/>• 달성 성능 = 하드웨어 피크 FLOP/s<br/>• 💡 대책: 배치 크기 확대, 커널 융합"]
     end
     Mem --> Crit --> Comp
 ```
