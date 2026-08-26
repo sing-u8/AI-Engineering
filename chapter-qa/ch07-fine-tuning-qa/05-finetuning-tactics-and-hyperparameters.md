@@ -63,8 +63,25 @@ flowchart TD
 
 ---
 
-### ② 베이스 모델 선정 및 라이선스 고려사항 (pp. 357 ~ 358)
-* **모델 저장소 (Model Registries):** Hugging Face Model Hub, Ollama, 제조사 공식 레포지토리 등에서 검증된 베이스 가중치를 다운로드합니다.
+### ② 베이스 모델 선정 및 개발 경로 (OpenAI Best Practices, pp. 357 ~ 358)
+파인튜닝을 시작할 때 OpenAI가 제안하는 2가지 전형적인 개발 경로(Development Paths):
+
+```mermaid
+flowchart TD
+    subgraph Progression["1. 점진적 발전 경로 (Progression Path)"]
+        P1["1단계: 초소형 모델로 코드 검증\n(가장 싸고 빠른 모델로 학습 스크립트 정상 동작 확인)"]
+        P2["2단계: 중간급 모델로 데이터 검증\n(데이터 추가 시 훈련 손실이 잘 떨어지는지 데이터 품질 검증)"]
+        P3["3단계: 목표 타겟 모델 최종 파인튜닝\n(검증 완료된 파이프라인으로 대규모 본 학습 수행)"]
+        P1 --> P2 --> P3
+    end
+
+    subgraph Distillation["2. 지식 증류 경로 (Distillation Path)"]
+        D1["최상위 플래그십 모델 (GPT-4)로 고품질 합성 데이터 생성"]
+        D2["소형 오픈소스 모델(8B)에 증류 파인튜닝 수행 ➔ 운영비 90% 절감"]
+        D1 --> D2
+    end
+```
+
 * **라이선스 제약 확인:**
   * **완전 상업적 허용:** Apache 2.0, MIT 라이선스 (예: Mistral-7B, Qwen2.5) ➔ 제약 없이 상업적 서비스 및 SaaS 배포 가능.
   * **조건부 상업적 허용:** Llama 3 Community License (월간 활성 사용자 7억 명 이하 등 특정 조건 충족 필요).
