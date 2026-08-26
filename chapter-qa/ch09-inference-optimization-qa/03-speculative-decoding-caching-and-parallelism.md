@@ -39,13 +39,14 @@ tags: [speculative-decoding, draft-model, inference-with-reference, medusa, prom
 ```mermaid
 flowchart TD
     subgraph Draft["1. 초경량 드래프트 모델 (1B 소형 모델)"]
-        D1["$K=4$개 후보 토큰을 초고속 순차 생성\n['The', 'quick', 'brown', 'fox']"]
+        D1["K=4개 후보 토큰 초고속 순차 생성<br/>('The', 'quick', 'brown', 'fox')"]
     end
 
     subgraph Target["2. 거대 타겟 모델 (70B 메인 모델) ⚡"]
-        T1["드래프트 4개 토큰을 단 1회의 병렬 순전파로 동시 검증!"]
-        T2{"수용(Accept) 여부 판별\n['The' (O), 'quick' (O), 'brown' (O), 'fox' (X)]"}
-        T3["통과한 3개 토큰 확정 + 거대 모델이 새로 샘플링한 보정 토큰 1개 추가\n최종 출력: ['The', 'quick', 'brown', 'dog'] 🚀"]
+        T1["드래프트 4개 토큰을 1회 GEMM으로 동시 병렬 검증"]
+        T2["수용 판별: The(O), quick(O), brown(O), fox(X)"]
+        T3["확정 3개 + 신규 보정 토큰 1개 추가<br/>최종 출력: The quick brown dog 🚀"]
+        T1 --> T2 --> T3
     end
 
     Draft --> Target
@@ -84,7 +85,7 @@ $$\text{Speedup} = \frac{1 - \alpha^{K+1}}{(1-\alpha)(1 + cK)}$$
 ```mermaid
 flowchart LR
     subgraph Common["공통 접두사 (Static Prefix: 5,000 토큰)"]
-        Sys["시스템 룰 + CLAUDE.md + RAG 문서"]
+        Sys["시스템 프롬프트 + CLAUDE.md + RAG 문서"]
     end
 
     subgraph Req1["요청 1 (User A)"]
@@ -94,9 +95,9 @@ flowchart LR
         Q2["질문 B (30 토큰)"]
     end
 
-    Common -->|사전 계산된 KV 캐시 메모리 보존| PCache[("⚡ 프롬프트 KV 캐시")]
-    PCache -->|캐시 히트 (90% 비용 할인 & TTFT 0.1s)| Req1
-    PCache -->|캐시 히트 (90% 비용 할인 & TTFT 0.1s)| Req2
+    Common -->|사전 계산된 KV 캐시 보존| PCache["⚡ 프롬프트 KV 캐시"]
+    PCache -->|캐시 히트: 90% 비용 절감| Req1
+    PCache -->|캐시 히트: 90% 비용 절감| Req2
 ```
 
 ### ② Anthropic Claude 프롬프트 캐싱 실측 효과 (Table 9-3)
@@ -116,11 +117,11 @@ flowchart LR
 ```mermaid
 flowchart TD
     subgraph TP["1. 텐서 병렬화 (Tensor Parallelism: TP) - 노드 내부"]
-        TP_Desc["• 단위: 단일 레이어 내 행렬(Matrix)을 행/열로 쪼갬\n• 통신: 초고속 NVLink (900 GB/s) 필수\n• 특징: 지연시간(Latency) 최소화에 최적"]
+        TP_Desc["• 단위: 단일 레이어 내 행렬(Matrix)을 행/열로 쪼갬<br/>• 통신: 초고속 NVLink (900 GB/s) 필수<br/>• 특징: 지연시간(Latency) 최소화에 최적"]
     end
 
     subgraph PP["2. 파이프라인 병렬화 (Pipeline Parallelism: PP) - 노드 간"]
-        PP_Desc["• 단위: 트랜스포머 레이어(Layer)를 GPU별로 분할 (1~40층 / 41~80층)\n• 통신: 일반 InfiniBand / 네트워크 소켓 가능\n• 특징: 처리량(Throughput) 확대에 최적 (마이크로배치 스케줄링)"]
+        PP_Desc["• 단위: 레이어(Layer)를 GPU별로 분할 (1~40층 / 41~80층)<br/>• 통신: 일반 InfiniBand / 네트워크 소켓 가능<br/>• 특징: 처리량(Throughput) 확대에 최적"]
     end
 ```
 
