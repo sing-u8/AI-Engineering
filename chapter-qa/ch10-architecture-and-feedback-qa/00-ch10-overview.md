@@ -20,8 +20,8 @@ tags: [system-architecture, guardrails, pii-masking, model-router, ai-gateway, s
 | :---: | :--- | :--- | :---: |
 | **00** | [[00-ch10-overview\|00. Chapter 10 전체 개요 및 목차]] | 시스템 아키텍처 및 피드백 전체 로드맵, 개념 지도 및 도표 총괄 색인 | pp. 449-494 |
 | **01** | [[01-enterprise-ai-application-architecture\|01. 엔터프라이즈 AI 5단계 아키텍처 진화]] | 단순 호출(Figure 10-1) ➔ 문맥 보강(Figure 10-2) ➔ 가드레일 및 PII 마스킹/역프록시(Figure 10-3, 10-4) ➔ 모델 라우터 & 통합 게이트웨이(Figure 10-5, 10-6, 10-7) ➔ 3단계 캐시 계층(Figure 10-8) ➔ 에이전틱 읽기/쓰기 피드백 루프(Figure 10-9, 10-10) (pp. 449-465) | `5-Step Evolution`, `Context Enhancement`, `Guardrails`, `PII Masking`, `Model Router`, `AI Gateway`, `Semantic Cache`, `Agent Loop` |
-| **02** | [[02-observability-tracing-and-evalops\|02. 관측 가능성, 분산 트레이싱 및 오케스트레이션]] | 모니터링 vs 관측 가능성, LLM 분산 트레이싱 계층(Trace & Span, 토큰/비용/지연시간 분해, Figure 10-11 LangSmith), 이벤트 기반 AI 파이프라인 오케스트레이션 (Temporal, Airflow, LangGraph) (pp. 465-474) | `Observability vs Monitoring`, `Distributed Tracing`, `Trace and Span`, `LangSmith`, `Latency Attribution`, `Pipeline Orchestration` |
-| **03** | [[03-user-feedback-flywheel-and-ui-mechanisms\|03. 사용자 피드백 플라이휠과 9대 실무 UI 메커니즘]] | 암묵적 대화 피드백 추출(Figure 10-12, Table 10-1 FITS 6대 클러스터), 9대 실무 피드백 UI 설계(ChatGPT Side-by-Side, Gemini Drafts, Midjourney Upscale, GitHub Copilot Telemetry, DALL-E Inpainting Figure 10-13 ~ 10-21), 피드백 편향 및 한계 (pp. 474-494) | `Feedback Flywheel`, `Implicit Feedback`, `FITS Dataset`, `Side-by-Side`, `Midjourney UI`, `Copilot Telemetry`, `Position Bias` |
+| **02** | [[02-observability-tracing-and-evalops\|02. 관측 가능성, 분산 트레이싱 및 오케스트레이션]] | 모니터링 vs 관측 가능성, LLM 분산 트레이싱 계층(Trace & Span, 토큰/비용/지연시간 분해, Figure 10-11 LangSmith), 이벤트 기반 AI 파이프라인 오케스트레이션 (Airflow, LangChain, LlamaIndex) (pp. 465-474) | `Observability vs Monitoring`, `Distributed Tracing`, `Trace and Span`, `LangSmith`, `Latency Attribution`, `Pipeline Orchestration` |
+| **03** | [[03-user-feedback-flywheel-and-ui-mechanisms\|03. 사용자 피드백 플라이휠과 9대 실무 UI 메커니즘]] | 암묵적 대화 피드백 추출(Figure 10-12, Table 10-1 FITS 8대 클러스터), 9대 실무 피드백 UI 설계(ChatGPT Side-by-Side, Gemini Drafts, Midjourney Upscale, GitHub Copilot Telemetry, DALL-E Inpainting Figure 10-13 ~ 10-21), 피드백 편향 및 한계 (pp. 474-494) | `Feedback Flywheel`, `Implicit Feedback`, `FITS Dataset`, `Side-by-Side`, `Midjourney UI`, `Copilot Telemetry`, `Position Bias` |
 
 ---
 
@@ -41,7 +41,7 @@ flowchart TD
     subgraph S2["2. 모니터링, 분산 트레이싱 & 오케스트레이션"]
         Trace["LLM 분산 트레이싱: Trace ➔ Span 호출 계층 트리 분해"]
         Obs["관측 가능성 (Observability): 토큰 비용 및 병목 지연시간 분석"]
-        Orch["파이프라인 오케스트레이션 (Temporal / LangGraph)"]
+        Orch["파이프라인 오케스트레이션 (LangChain / LlamaIndex)"]
         Trace --> Obs --> Orch
     end
 
@@ -73,7 +73,7 @@ flowchart TD
 | **Figure 10-10** | 외부 환경(DB, 파일 시스템, 서드파티 API)의 상태를 변경하는 5단계 쓰기 에이전트 아키텍처 | **p. 465** | 01 |
 | **Figure 10-11** | LangSmith를 통해 시각화된 RAG 및 다단계 에이전트 호출의 분산 요청 트레이스(Trace) | **p. 471** | 02 |
 | **Figure 10-12** | 사용자가 생성을 조기 중단(Stop)하고 프롬프트를 수정한 대화에서 부정적 피드백을 추출하는 흐름 | **p. 477** | 03 |
-| **Table 10-1** | FITS 데이터셋 자동 클러스터링을 통해 규명된 6대 대화형 암묵적 피드백 유형 분류표 | **p. 478** | 03 |
+| **Table 10-1** | FITS 데이터셋 자동 클러스터링을 통해 규명된 8대 대화형 암묵적 피드백 유형 분류표 | **p. 478** | 03 |
 | **Figure 10-13** | ChatGPT에서 답변 재생성(Regenerate) 시 이전 답변과 새 답변 중 선호도를 묻는 UI | **p. 479** | 03 |
 | **Figure 10-14** | DALL-E에서 이미지의 특정 영역만 브러시로 칠해 재성성하는 인페인팅(Inpainting) 피드백 UI | **p. 481** | 03 |
 | **Figure 10-15** | ChatGPT가 두 개의 응답을 나란히 보여주고 사용자가 더 나은 쪽을 고르게 하는 Side-by-Side UI | **p. 482** | 03 |

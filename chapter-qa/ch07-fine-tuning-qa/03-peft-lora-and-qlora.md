@@ -28,7 +28,7 @@ tags: [peft, lora, qlora, low-rank-decomposition, adapters, prompt-tuning, prefi
 | **Figure 7-11** | 원본 고정 가중치 $W_0$에 저차원 행렬 곱 $B \times A$를 병렬로 더하는 LoRA 아키텍처 다이어그램 | **p. 331** | 2. LoRA의 수학적 원리와 저차원 분해 |
 | **Table 7-5** | 18M 학습 파라미터 제약 하에서 LoRA vs 어댑터 vs 완전 파인튜닝 GLUE 성능 비교표 | **p. 333** | 2. LoRA 성능 실증 및 파라미터 가이드 |
 | **Figure 7-12** | 단일 베이스 가중치를 공유하고 요청마다 LoRA 어댑터를 전환하는 Multi-LoRA 서빙 구조 | **p. 334** | 3. Multi-LoRA 서빙 아키텍처 |
-| **Table 7-6** | 7B 베이스 모델 가중치(14GB) 대비 LoRA 어댑터 가중치(70MB) 메모리 극소 비중 비교표 | **p. 336** | 3. Multi-LoRA 서빙 경제학 |
+| **Table 7-6** | Llama 2(13B) 및 GPT-3(175B) 모델 가중치 대비 LoRA 어댑터 가중치의 메모리 비중 비교표 | **p. 345** | 3. Multi-LoRA 서빙 아키텍처 |
 | **Table 7-7** | QLoRA 기반 Guanaco 65B 모델과 ChatGPT/GPT-4의 Vicuna 벤치마크 Elo 레이팅 비교표 | **p. 338** | 4. QLoRA 4비트 양자화 파인튜닝 |
 
 ---
@@ -311,7 +311,15 @@ flowchart TD
     Base --> Resp["동시 멀티테넌트 응답 생성"]
 ```
 
-### ① 100개 모델 서빙 시 스토리지/메모리 수학 비교 (Table 7-6)
+### ① 베이스 모델 vs LoRA 어댑터 메모리 비교 (Table 7-6)
+LoRA 파라미터는 원본 모델에 비해 극도로 적기 때문에 메모리 소모가 매우 작습니다.
+
+| 모델 | 모델 가중치 메모리 (16 bits) | LoRA 학습 파라미터 (r=2, query & key) | LoRA 어댑터 메모리 (16 bits) |
+| :--- | :---: | :---: | :---: |
+| **Llama 2 (13B)** | 26 GB | 3.28M | **6.55 MB** |
+| **GPT-3 (175B)** | 350 GB | 18.87M | **37.7 MB** |
+
+### ② 100개 모델 서빙 시 스토리지/메모리 수학 비교 (p. 344)
 가중치 행렬 $W$가 $4096 \times 4096$ ($1,677\text{만 개} \approx 16.8\text{M}$ 파라미터)이고 LoRA 랭크 $r=8$ ($4096 \times 8 \times 2 = 65,536$ 파라미터)인 경우:
 
 | 서빙 방식 | 100개 모델 저장 파라미터 수 | 실제 용량 비교 | 장단점 및 특징 |

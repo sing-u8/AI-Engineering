@@ -48,8 +48,10 @@ flowchart TD
 
 | 원본 데이터 (편향 위험) | 증강 데이터 (편향 완화 및 중립화) | 효과 |
 | :--- | :--- | :--- |
-| "의사가 수술을 시작했고, **그(He)**는 간호사에게 가위를 요청했다." | "의사가 수술을 시작했고, **그녀(She)**는 간호사에게 가위를 요청했다." | 직업-성별 고정관념 교정 |
-| "간호사가 환자를 안심시키며 **그녀의(Her)** 손을 잡았다." | "간호사가 환자를 안심시키며 **그의(His)** 손을 잡았다." | 성별 균형 학습 |
+| "그녀는 환상적인 간호사입니다."<br>(She's a fantastic nurse.) | "그는 환상적인 간호사입니다."<br>(He's a fantastic nurse.) | 직업-성별 고정관념 교정 |
+| "회사의 CEO인 Alex Wang 씨는..."<br>(The CEO of the firm, Mr. Alex Wang...) | "회사의 CEO인 Alexa Wang 씨는..."<br>(The CEO of the firm, Ms. Alexa Wang...) | 직위-성별 고정관념 교정 |
+| "오늘 엄마가 저녁으로 캐서롤을 만드셨다."<br>(Today, my mom made a casserole for dinner.) | "오늘 아빠가 저녁으로 캐서롤을 만드셨다."<br>(Today, my dad made a casserole for dinner.) | 성역할 고정관념 교정 |
+| "Emily는 항상 바이올린을 사랑했다."<br>(Emily has always loved the violin.) | "Mohammed는 항상 바이올린을 사랑했다."<br>(Mohammed has always loved the violin.) | 이름-문화권 편향 교정 |
 
 ---
 

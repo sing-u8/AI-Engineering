@@ -30,108 +30,121 @@ tags: [speculative-decoding, draft-model, inference-with-reference, medusa, prom
 
 ---
 
-## 1. 추측·병렬 디코딩의 원리 (Figures 9-9 ~ 9-11, pp. 427 ~ 433) ⭐
+## 1. 추측 디코딩과 병렬 디코딩 (Figures 9-9 ~ 9-11, pp. 427 ~ 433) ⭐
 
-### ① 추측 디코딩 (Speculative Decoding, Figure 9-9)
+### ① 추측 디코딩의 작동 원리 (Speculative Decoding, Figure 9-9)
+
+순차적 자기회귀(Autoregressive) 생성의 병목을 우회하기 위해, 가벼운 모델이 먼저 여러 토큰을 추측 생성하고 메인 모델이 이를 일괄 검증하는 기법입니다:
 
 ```mermaid
 flowchart TD
-    subgraph Draft["1. 초경량 드래프트 모델 (1B 소형 모델)"]
+    subgraph Draft["1. 초경량 드래프트 모델 (예: 4B 소형 모델) ⚡"]
         D1["K=4개 후보 토큰 초고속 순차 생성<br/>('The', 'quick', 'brown', 'fox')"]
     end
 
-    subgraph Target["2. 거대 타겟 모델 (70B 메인 모델) ⚡"]
-        T1["드래프트 4개 토큰을 1회 GEMM으로 동시 병렬 검증"]
+    subgraph Target["2. 거대 타겟 모델 (예: 70B 메인 모델) 👑"]
+        T1["드래프트 4개 토큰을 1회 병렬 연산(GEMM)으로 동시 검증"]
         T2["수용 판별: The(O), quick(O), brown(O), fox(X)"]
-        T3["확정 3개 + 신규 보정 토큰 1개 추가<br/>최종 출력: The quick brown dog 🚀"]
+        T3["일치하는 3개 확정 + 타겟 모델의 1개 보정 토큰 생성<br/>➔ 총 4개 토큰 즉시 획득! 🚀"]
         T1 --> T2 --> T3
     end
 
     Draft --> Target
 ```
 
-* **물리적 핵심 원리:**  
-  거대 모델(70B)이 1개 토큰을 생성하는 데 걸리는 시간(메모리 로드 병목)과, 소형 모델이 미리 만든 $K$개 토큰을 **단 한 번의 행렬-행렬 곱셈(GEMM, Compute-bound)으로 병렬 검증하는 시간은 물리적으로 거의 같습니다.**
-* **품질 보존:** 책은 speculative decoding이 모델의 품질을 바꾸지 않는 접근이라고 설명한다. 구현과 샘플링 방식에 따라 검증이 필요하다.
-
-책은 고정된 speedup 공식을 제시하지 않는다. acceptance rate는 도메인에 따라 달라지고, K를 크게 하면 target 검증 호출은 줄지만 draft 토큰이 거부될 가능성도 커진다. Chinchilla-70B에 4B draft model을 사용한 사례에서는 draft가 1.8ms/token, target이 14.1ms/token이었고 전체 응답 latency가 절반 이상 줄었다(p.429).
-
----
-
-### ② Inference with Reference (참조 텍스트 기반 추측 디코딩, Figure 9-10)
-* 문서·코드·대화처럼 입력의 일부가 출력에 반복되는 경우, 입력에서 관련 텍스트 span을 골라 draft sequence로 사용한다.
-* 별도 draft model은 필요 없지만 입력과 출력의 겹침이 큰 경우에만 유용하며, 책은 이런 사용 사례에서 약 2배 generation speedup을 보고한다(p.430).
+#### 💡 추측 디코딩이 가능한 3대 핵심 물리적 원리 (p. 429)
+1. **검증 속도 >> 생성 속도:** 여러 토큰을 순차 생성하는 것은 느리지만, 이미 생성된 $K$개 토큰을 검증하는 것은 **단 한 번의 행렬 곱셈(GEMM, Compute-bound)으로 병렬 처리(Prefill과 동일)**할 수 있어 시간이 거의 동일하게 소요됩니다.
+2. **쉬운 토큰의 존재:** 자연어와 코드에는 예측하기 쉬운 토큰(관사, 문법적 연결어 등)이 많아, 약한 소형 모델도 높은 수용률(Acceptance Rate)로 맞출 수 있습니다.
+3. **유휴 연산 자원 활용 (Idle FLOPs):** 디코딩 단계는 **메모리 대역폭 병목(Memory-bound)** 상태이므로 연산 코어(FLOPs)가 놀고 있습니다. 이 유휴 연산력을 활용해 검증을 수행하므로 **'추가 비용 없는 공짜 검증(Free Verification)'**이 가능합니다.
 
 ---
 
-### ③ Medusa: 다중 예측 헤드 기반 추측 디코딩 (Cai et al., 2024, Figure 9-11)
-* 별도 draft model 대신 원래 모델에 여러 decoding head를 추가한다. 원래 모델은 frozen 상태로 두고 head를 학습해 각 미래 위치의 토큰을 예측한다.
-* 각 head가 여러 후보를 만들고 tree-based attention으로 후보를 검증·통합한다. NVIDIA는 Llama 3.1에서 최대 1.9배 향상을 보고했다(p.432-433).
-
-Lookahead decoding처럼 Jacobi 방법으로 미래 토큰을 병렬 생성·검증하는 계열도 있으며, Medusa는 그와 달리 여러 decoding head와 tree-based attention을 사용한다.
+#### 📐 책의 실증 사례 및 엔지니어링 고려사항 (pp. 429 ~ 430)
+* **Chinchilla-70B 실측 사례 (DeepMind, Chen et al., 2023):**
+  * 4B 드래프트 모델은 토큰당 **1.8 ms** (타겟 70B 모델은 **14.1 ms**로 8배 차이).
+  * 모델 출력 품질의 저하(손실) 없이 **전체 응답 지연시간을 50% 이상 단축**.
+* **$K$ (드래프트 토큰 수)의 트레이드오프:**
+  * $K$가 너무 크면 타겟 모델 호출 횟수는 줄지만, 뒤쪽 토큰이 거절당할 확률이 높아져 드래프트 연산이 낭비됨.
+* **드래프트 모델 요구조건:** 타겟 모델과 동일한 **어휘집(Vocabulary)과 토크나이저(Tokenizer)**를 공유하는 것이 이상적임.
 
 ---
 
-## 2. 프롬프트 캐싱 경제학 (Prompt Caching, Figure 9-17, Table 9-3, pp. 442 ~ 445) ⭐
+### ② 참조 텍스트 기반 추측 디코딩 (Inference with Reference, Figure 9-10, p. 430)
+* **아이디어:** RAG 문서 요약, 코드 버그 수정, 멀티턴 대화 등에서는 **출력 텍스트의 상당 부분이 입력 프롬프트의 내용을 그대로 복사(Repeat)**하는 특성이 있습니다.
+* **작동 방식:** 별도의 드래프트 모델 없이, **입력 문맥에서 일치하는 텍스트 스팬(Text Span)을 직접 복사하여 드래프트 토큰으로 투입**하고 타겟 모델이 검증합니다.
+* **효과:** 별도 모델 서빙 비용 0원으로 텍스트 중복이 많은 태스크에서 **2배의 생성 속도 향상(2x Speedup)**을 달성합니다 (Yang et al., 2023).
 
-### ① 공통 접두사 KV 캐시 공유 메커니즘 (Figure 9-17)
-애플리케이션의 시스템 프롬프트, many-shot 예시, 긴 문서, 이전 대화처럼 여러 요청에 반복되는 텍스트 구간은 프롬프트 캐시로 재사용할 수 있다.
+---
 
-```mermaid
-flowchart LR
-    subgraph Common["반복되는 텍스트 구간"]
-        Sys["시스템 프롬프트·긴 문서·이전 대화"]
-    end
+### ③ 병렬 디코딩 기법: Medusa vs Lookahead (pp. 432 ~ 433, Figure 9-11)
 
-    subgraph Req1["요청 1 (User A)"]
-        Q1["질문 A (50 토큰)"]
-    end
-    subgraph Req2["요청 2 (User B)"]
-        Q2["질문 B (30 토큰)"]
-    end
+순차 생성 자체를 깨고 여러 미래 토큰($x_{t+1}, \dots, x_{t+k}$)을 한 번에 동시 예측하는 기술:
 
-    Common -->|겹치는 구간 캐시| PCache["⚡ 프롬프트 캐시"]
-    PCache --> Req1
-    PCache --> Req2
-```
+| 기법 | 구조 및 메커니즘 | 검증 방식 | 실전 성능 및 특징 |
+| :--- | :--- | :--- | :--- |
+| **Lookahead Decoding**<br>(Fu et al., 2024) | 단일 디코더가 야코비 반복법(Jacobi Iteration)으로 미래 토큰을 병렬 생성 | **야코비(Jacobi) 검증:** 불일치한 토큰만 선택적으로 재생성 및 미세조정 | 별도 헤드 추가 없이 단일 모델로 수행 |
+| **Medusa**<br>(Cai et al., 2024, Figure 9-11) | 기본 모델 위에 **복수 개의 예측 헤드(Medusa Heads)**를 부착하여 미래 위치($t+1, t+2, \dots$) 예측 | **트리 기반 어텐션 (Tree-based Attention):** 각 헤드의 후보군을 트리 구조로 구성해 최적 경로 검증 | **Llama 3.1 토큰 생성 속도 최대 1.9배 가속** (NVIDIA HGX H200) |
 
-### ② Anthropic 프롬프트 캐싱 실측 효과 (Table 9-3)
+---
 
-| 사용 사례 | 캐시 전 TTFT | 캐시 후 TTFT | 비용 감소 |
+## 2. 프롬프트 캐싱 경제학 (Prompt Caching, Figure 9-17, Table 9-3, pp. 443 ~ 444) ⭐
+
+### ① 공통 접두사(Prefix) 재사용 메커니즘
+시스템 프롬프트, 긴 RAG 참조 문서, 다중 턴 대화 내역 등 여러 요청 간에 겹치는 텍스트의 **KV 캐시를 버리지 않고 메모리에 보관하여 다음 요청에서 재사용**합니다 (Context / Prefix Cache).
+
+* **엄청난 비용 절감 효과 (책의 예시):**
+  * 시스템 프롬프트가 1,000토큰이고 하루 100만 회 API 호출이 발생할 때:
+  * ➔ 프롬프트 캐싱 적용 시 **하루 약 10억 개(1 Billion)의 중복 입력 토큰 연산을 완전히 절감!**
+
+---
+
+### ② 상용 모델 API별 캐싱 정책 및 Anthropic 실측 데이터 (Table 9-3)
+* **Google Gemini:** 캐시된 입력 토큰에 대해 **75% 가격 할인** 적용 (캐시 스토리지 비용: 100만 토큰당 시간당 $1.00).
+* **Anthropic Claude:** 최대 **90% 비용 절감** 및 **75% TTFT(첫 토큰 지연시간) 단축** 보장.
+
+#### 📊 Anthropic 실측 사용 사례별 절감 효과 (Table 9-3, p. 444)
+
+| 사용 사례 | 캐시 전 TTFT | 캐시 후 TTFT (지연 단축) | 비용 감소율 |
 | :--- | :---: | :---: | :---: |
-| 100K 토큰 책과 대화 | 11.5초 | 2.4초 (-79%) | -90% |
-| 10K 토큰 many-shot | 1.6초 | 1.1초 (-31%) | -86% |
-| 긴 시스템 프롬프트의 10턴 대화 | 약 10초 | 약 2.5초 (-75%) | -53% |
+| **10만 토큰 분량 책 기반 질의응답 (Book Q&A)** | 11.5초 | **2.4초 (-79% 🚀)** | **-90% 🏆** |
+| **1만 토큰 퓨샷 프롬프팅 (Many-shot)** | 1.6초 | **1.1초 (-31%)** | **-86%** |
+| **긴 시스템 프롬프트의 10턴 대화 (Multi-turn)** | 약 10초 | **약 2.5초 (-75%)** | **-53%** |
 
 ---
 
-## 3. 분산 추론: 텐서 병렬화 vs 파이프라인 병렬화 (Figures 9-18, 9-19, pp. 445 ~ 447) ⭐
+## 3. 분산 추론: 4대 병렬화 아키텍처 (Figures 9-18, 9-19, pp. 444 ~ 447) ⭐
 
-큰 모델은 단일 장치에 맞지 않을 수 있어 모델을 여러 장치에 나눠야 한다.
+거대 모델을 여러 대의 가속기에 분산하여 서빙하는 핵심 전략:
 
 ```mermaid
 flowchart TD
-    subgraph TP["1. 텐서 병렬화 (Tensor Parallelism: TP) - 노드 내부"]
-        TP_Desc["• 단위: 연산에 사용되는 텐서를 여러 장치로 분할<br/>• 특징: 큰 모델을 서비스하고 latency를 줄일 수 있으나 통신 비용이 발생"]
+    subgraph Rep["1. 복제 병렬화 (Replica Parallelism)"]
+        R1["동일 모델을 여러 GPU에 복제 ➔ 다중 요청 동시 처리 (Bin-packing 문제)"]
     end
 
-    subgraph PP["2. 파이프라인 병렬화 (Pipeline Parallelism: PP) - 노드 간"]
-        PP_Desc["• 단위: 모델 계산을 여러 stage로 분할<br/>• 특징: micro-batch로 겹쳐 실행할 수 있지만 요청 latency가 증가할 수 있음"]
+    subgraph TP["2. 텐서 병렬화 (Tensor Parallelism: TP) - 노드 내부 ⚡"]
+        T1["가중치 행렬을 열/행 단위로 분할하여 단일 연산자 병렬 실행 (Figure 9-18)"]
     end
+
+    subgraph PP["3. 파이프라인 병렬화 (Pipeline Parallelism: PP) - 노드 간 🌐"]
+        P1["모델 레이어를 여러 GPU에 층별로 분할하고 마이크로배치 파이프라인 구성 (Figure 9-19)"]
+    end
+
+    subgraph LongSeq["4. 긴 시퀀스 병렬화 (Context & Sequence Parallelism)"]
+        CP["• Context Parallelism: 입력 시퀀스 텍스트 자체를 여러 GPU로 분할\n• Sequence Parallelism: 어텐션과 피드포워드 연산자를 분할"]
+    end
+
+    Rep --> TP --> PP --> LongSeq
 ```
 
-### ① 텐서 병렬화 (Tensor Parallelism / Megatron-LM, Figure 9-18)
-* **열 병렬화 (Column Parallel):** 가중치 행렬 $W$를 열 단위로 쪼개어 각 GPU가 독립적으로 행렬 곱셈 $XW_1, XW_2$ 수행.
-* **행 병렬화 (Row Parallel):** 다음 레이어에서 행 단위로 쪼갠 가중치와 곱한 뒤 `All-Reduce (Sum)` 통신을 통해 최종 합산.
-* **장점:** 한 장치에 맞지 않는 모델을 서비스하고 latency를 줄일 수 있다. 다만 장치 간 통신 오버헤드가 이득을 줄일 수 있다.
+### ① 4대 병렬화 기법 상세 비교
 
-### ② 파이프라인 병렬화 (Pipeline Parallelism, Figure 9-19)
-* 모델 계산을 여러 장치의 stage로 나누고, 활성화를 다음 stage로 전달한다. 배치를 작은 **마이크로배치(Micro-batches)**로 나눠 stage 간 계산을 겹칠 수 있다.
-* 각 요청의 총 latency가 증가할 수 있으므로 latency가 엄격한 추론에서는 replica parallelism을 선호할 수 있다.
-
-### ③ 그 밖의 병렬화
-
-Replica parallelism은 모델 복제본을 여러 개 만들어 동시 요청을 처리하는 가장 단순한 방법이다. 모델과 GPU가 여러 종류라면 어떤 복제본을 어떤 장치에 배치할지 bin-packing 문제가 생긴다. 긴 입력 처리에는 context parallelism(입력 시퀀스 분할)과 sequence parallelism(전체 입력에 필요한 연산을 장치별 분할)도 사용할 수 있다(p.445-447).
+| 병렬화 유형 | 분할 단위 및 작동 메커니즘 | 주요 장점 | 단점 및 실무 가이드라인 |
+| :--- | :--- | :--- | :--- |
+| **복제 병렬화**<br>(Replica Parallelism) | 모델 전체를 각 GPU마다 1개씩 온전히 복제 | 구현이 가장 단순하며 개별 요청 지연시간 증가 없음 | 모델이 단일 GPU 메모리(24G/40G/80G)에 완전히 들어갈 때만 가능 |
+| **텐서 병렬화 (TP)**<br>(Tensor Parallelism, Figure 9-18) | 단일 행렬 곱셈 연산자 내부의 **가중치 텐서를 열(Column)/행(Row) 단위로 쪼개어 연산** (Megatron-LM) | 단일 장치에 안 들어가는 거대 모델 서빙 가능, **추론 지연시간(Latency) 직접 단축** | GPU 간 고속 통신(All-Reduce)이 빈번하므로 **초고속 NVLink가 지원되는 단일 노드 내부**에서만 사용 |
+| **파이프라인 병렬화 (PP)**<br>(Pipeline Parallelism, Figure 9-19) | 모델의 **레이어(Layer)들을 여러 머신으로 분할**하고 마이크로배치 단위로 순차 전달 | 노드 간 느린 네트워크(이더넷) 환경에서도 거대 모델 분산 가능 | 통신 대기(Bubble)로 인해 **개별 요청의 총 지연시간(Latency) 증가** (학습에는 유리하나 엄격한 실시간 추론에서는 기피) |
+| **컨텍스트 / 시퀀스 병렬화**<br>(Context / Sequence Parallelism) | 초장문(Long-context) 입력 시퀀스 토큰 또는 어텐션/FFN 연산자를 여러 GPU로 분할 | 수십만 토큰의 초장문 컨텍스트 추론 지원 | 통신 동기화 오버헤드 관리 필요 |
 
 ---
 
