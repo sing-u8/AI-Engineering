@@ -3,3 +3,6 @@ book_text.txt
 evaluate_tags.py
 extract_pdf.py
 .venv
+*.py
+*.txt
+*.html
