@@ -70,7 +70,7 @@ flowchart TD
     end
 
     User --> Cache
-    Cache -- Cache Miss --> PII_Mask --> Injection --> RAG --> Router
+    Cache -- Cache Miss --> Injection --> RAG --> PII_Mask --> Router
     Router -- 단순 질의 --> Gateway --> SmallM
     Router -- 복잡 추론 --> Gateway --> LargeM
     SmallM & LargeM --> Hallu_Check --> PII_Unmask --> Layer5
